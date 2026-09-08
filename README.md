@@ -15,3 +15,7 @@ Der Produktionsserver läuft als Node.js-Anwendung unter Linux und wird über AM
 - Healthcheck: `http://<server-ip>:7778/health`
 
 GitHub Pages ist nicht mehr der Produktionspfad.
+
+## Feature-Reparatur
+
+Die aktuelle Hauptversion repariert die Bedienung von AGENCY, BUILD, RANKS und WORLD sowie die XP-Anzeige nach abgeschlossenen Einsätzen.
