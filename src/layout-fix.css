@@ -1,0 +1,5 @@
+/* Keep the CAD map inside its grid cell. The generic legacy .map-shell rule
+   uses absolute positioning; without a positioned .map-wrap it can cover the
+   entire application and hide the game header, tabs and side panels. */
+.map-wrap{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;background:#070a0f!important}
+.map-wrap>.map-shell{position:absolute!important;inset:0!important;width:100%!important;height:100%!important}
