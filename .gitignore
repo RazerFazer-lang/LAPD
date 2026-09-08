@@ -6,3 +6,4 @@ data/
 !.env.example
 .vscode
 .DS_Store
+server/.dev-index.ts
