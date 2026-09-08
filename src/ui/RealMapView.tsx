@@ -12,7 +12,20 @@ const facilityStyle:Record<string,{icon:string;color:string}>={POLICE_STATION:{i
 const bounds={west:-122.285,east:-122.185,south:37.455,north:37.535};
 const toLngLat=(p:Point):[number,number]=>[bounds.west+p.x/100*(bounds.east-bounds.west),bounds.north-p.y/100*(bounds.north-bounds.south)];
 const fromLngLat=(lng:number,lat:number):Point=>({x:((lng-bounds.west)/(bounds.east-bounds.west))*100,y:((bounds.north-lat)/(bounds.north-bounds.south))*100});
-function Vehicle({unit}:{unit:GameState['units'][number]}){const moving=unit.status==='EN_ROUTE'||unit.status==='RETURNING';const heading=unit.heading??0;const ladder=/Ladder|Truck/i.test(unit.type);const short=unit.callsign.replace('AMBULANCE','A').replace('PATROL','P').replace('ENGINE','E').replace('TRUCK','T');return <div className={`rv ${unit.service.toLowerCase()} ${moving?'moving':''}`} style={{transform:`translate(-50%,-50%) rotate(${heading}deg)`}}><span className="rv-glow"/><span className="rv-body"><i className="rv-window"/>{ladder&&<i className="rv-ladder"/>}<i className="rv-wheel w1"/><i className="rv-wheel w2"/><i className="rv-wheel w3"/><i className="rv-wheel w4"/><i className="rv-light l1"/><i className="rv-light l2"/></span><b>{short}</b></div>}
+function Vehicle({unit}:{unit:GameState['units'][number]}){
+ const moving=unit.status==='EN_ROUTE'||unit.status==='RETURNING';
+ const heading=unit.heading??0;
+ const raw=unit.type||'';
+ const supervisor=/supervisor|command/i.test(`${raw} ${unit.callsign} ${unit.capabilities.join(' ')}`);
+ const ladder=/ladder|truck/i.test(raw)||/ladder/i.test(unit.callsign);
+ const engine=/engine|pumper/i.test(raw)||/engine/i.test(unit.callsign);
+ const ambulance=/ambulance|rescue|ems/i.test(raw)||/ambulance/i.test(unit.callsign);
+ const kind=supervisor?'supervisor':ladder?'ladder':engine?'engine':ambulance?'ambulance':'patrol';
+ const short=supervisor?'SUP':ladder?'L':engine?'E':ambulance?'A':'P';
+ return <div className={`rv ${unit.service.toLowerCase()} ${kind} ${moving?'moving':''}`} style={{transform:`translate(-50%,-50%) rotate(${heading}deg)`}}>
+   <span className="rv-shadow"/><span className="rv-body"><i className="rv-roof"/><i className="rv-window front"/><i className="rv-window rear"/>{(ladder||engine)&&<><i className="rv-cab"/><i className="rv-equipment"/></>}{ladder&&<i className="rv-ladder"/>}{ambulance&&<><i className="rv-medstripe"/><i className="rv-star"/></>}<i className="rv-grille"/><i className="rv-wheel w1"/><i className="rv-wheel w2"/><i className="rv-wheel w3"/><i className="rv-wheel w4"/><i className="rv-light l1"/><i className="rv-light l2"/></span><b>{short}</b>
+ </div>
+}
 export function RealMapView({state,zoom,onZoomChange,onIncidentSelect,buildMode,onMapBuild}:{state:GameState;zoom:number;onZoomChange:(z:number)=>void;onIncidentSelect:(id:string)=>void;buildMode?:Service|null;onMapBuild?:(p:Point)=>void}){
  const ref=useRef<HTMLDivElement|null>(null);const mapRef=useRef<Map|null>(null);const [ready,setReady]=useState(false);const [failed,setFailed]=useState(false);const [ambient,setAmbient]=useState(false);const [units,setUnits]=useState(true);const [incidents,setIncidents]=useState(true);const [poi,setPoi]=useState(true);const [traffic,setTraffic]=useState(false);const [,tick]=useState(0);const facilities=state.facilities??[];const active=state.incidents.filter(i=>!['COMPLETE','CANCELLED'].includes(i.status));
  useEffect(()=>{if(!ref.current||mapRef.current)return;setWorkerUrl(workerUrl);const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/bright',center:[-122.235,37.49],zoom:13,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:{compact:true},renderWorldCopies:false,maxBounds:[[-122.31,37.43],[-122.16,37.56]]});map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'bottom-right');map.addControl(new ScaleControl({maxWidth:140,unit:'imperial'}),'bottom-left');map.on('load',()=>{setReady(true);map.resize()});map.on('move',()=>tick(v=>v+1));map.on('error',e=>{const m=e?.error?.message?.toLowerCase()??'';if(m.includes('style')||m.includes('worker')||m.includes('source'))setFailed(true)});mapRef.current=map;return()=>{map.remove();mapRef.current=null}},[]);
