@@ -2,11 +2,9 @@
 
 **Emergency Communications Simulator** – browserbasiertes 2D-Multiplayer-Leitstellenspiel im amerikanischen Stil mit deutscher Benutzeroberfläche.
 
-## ▶ Produktionsbetrieb
+## ▶ Linux-HTTP-Produktionsbetrieb
 
-Das Spiel wird als Node.js-Webservice betrieben. Frontend und Multiplayer-WebSocket laufen über denselben HTTP-Host.
-
-GitHub Pages ist kein Produktionshost mehr. Node.js liefert den Vite-Build direkt aus und stellt den Multiplayer-WebSocket unter `/ws` bereit.
+Das Produktionsziel ist ein Linux-Node.js-Webservice. Node.js liefert den Vite-Build direkt aus und stellt den Multiplayer-WebSocket unter `/ws` bereit. Für den aktuellen Betrieb werden ausschließlich HTTP und `ws://` verwendet.
 
 ## Aktueller Stand
 
@@ -35,7 +33,8 @@ Der Server speichert den versionierten Zustand atomar standardmäßig unter
 `data/game-state.json`, bei Aktionen sowie alle 60 Sekunden. Dieser Pfad ist
 von Git ausgeschlossen und kann mit `SAVE_FILE` geändert werden.
 
-Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host: `ws://<host>/ws`. Für den aktuellen Betrieb werden ausschließlich HTTP und `ws://` verwendet.
+Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host:
+`ws://<host>/ws`.
 
 ## Build & Tests
 
@@ -49,55 +48,15 @@ GitHub Actions führt Installation, Tests und Build automatisch bei Pushes auf `
 ## Architektur
 
 - `src/game/state.ts` – versionierter, typisierter Game-State und Initialdaten
-- `src/ui/MapView.tsx` – prozedurale amerikanische 2D-Karte mit Straßen, Highways, Städten, Einsatz- und Fahrzeugmarkern
-- `src/App.tsx` – CAD-Frontend, Dispatch, Incident Management, Management, Personal, Krankenhäuser, Statistik und Admin
-- `src/styles.css` – Dark Command Center UI mit Desktop-/Laptop-Responsive Layout
-- `server/index.ts` – autoritativer WebSocket-Server mit Rollenprüfung, Action-Validierung und State-Broadcast
+- `src/ui/RealMapView.tsx` – interaktive amerikanische 2D-Karte mit Straßen, Highways, Einsatz- und Fahrzeugmarkern
+- `src/App.tsx` – CAD-Frontend, Dispatch, Incident Management und Multiplayer-Client
+- `server/index.ts` – autoritativer Node.js-WebSocket- und HTTP-Server
 - `src/i18n` – zentrale deutsche UI-Texte
 - `tests` – Domain-/Regressionstests
 
-## Implementierte Systemsäulen
+## Produktionsmodell
 
-### Karte & Welt
-Redwood City, Lakewood, Pine Valley, Port Redwood und Desert Ridge werden in einer gemeinsamen fiktiven Region abgebildet. Das Kartenmodell enthält Hauptstraßen, Highways, Wasserflächen, Stadtbereiche, Gebäude-Blöcke, Karten-Layer und Fahrzeug-/Einsatzpositionen.
-
-### 911 & Einsatzsimulation
-Einsätze entstehen über eine gewichtete Ereignislogik. Medizinische Notfälle, Feuer, Polizei, Verkehr, Gefahrgut und Waldbrand sind enthalten. Einsätze besitzen Priorität, Gefahrenwert, Eskalation, Status, Phasen, Ziele, Patienten und angeforderte Dienste.
-
-### Einheiten
-Police, Fire und EMS besitzen Status, Besatzung, Fähigkeiten, Geschwindigkeit, Wartungszustand, Treibstoff und Einsatzzuordnung. Einheiten können alarmiert, auf Anfahrt, vor Ort, transportierend oder auf Rückkehr gesetzt werden.
-
-### Management
-Budget, Einnahmen, laufende Kosten, Payroll, Treibstoff, Wartung, Upgrades, Level und Reputation werden im Spielzustand geführt. Fahrzeuge und CAD-/Analytics-Upgrades können gekauft werden.
-
-### Personal
-Dispatcher besitzen Erfahrung, Performance, Stress, Fehlerquote, Gehalt und Schicht. Neue Mitarbeiter können im Spiel eingestellt werden.
-
-### Krankenhäuser
-Mehrere Häuser besitzen Kapazität, aktuelle Belegung, Trauma, Burn Unit, Pädiatrie und Helipad. Diese Daten stehen im Managementbereich live zur Verfügung.
-
-### Multiplayer
-Der Node/WebSocket-Server ist autoritativ. Rollen umfassen Call Taker, Police Dispatcher, Fire Dispatcher, EMS Dispatcher, Supervisor, Manager und Administrator. Rollen- und Admin-Tokens werden serverseitig geprüft; Dispatch, Abschluss, Personal, Fahrzeuge sowie Admin-Aktionen werden auf dem Server validiert und an alle Clients synchronisiert.
-
-### Save/Load
-Der Browser besitzt lokale Savegame-Daten für den Offline-Betrieb. Multiplayer-Sitzungen verwenden zusätzlich den atomar geschriebenen, versionierten Server-Spielstand; die Admin-Konsole kann diesen nur mit Administratorrechten zurücksetzen.
-
-## Phasenplan
-
-1. Fundament – abgeschlossen
-2. Kartenengine – integriert
-3. Einheiten – integriert
-4. Einsatzengine – integriert
-5. Routing-/Bewegungsgrundlage – integriert als Kartenbewegung; vollwertiges straßenbasiertes Routing ist der nächste Vertiefungsschritt
-6. Wirtschaft – integriert
-7. Multiplayer – autoritativer WebSocket-Kern integriert
-8. Personal – integriert
-9. Krankenhäuser – integriert
-10. Wetter/Verkehr/Tag-Nacht – integriert
-11. Großereignisse – Ereignistypen und Eskalationsarchitektur vorhanden
-12. Polish – Command-Center-UI und Kartenvisualisierung integriert
-13. QA – Unit-/Domain-Tests und CI integriert
-14. Release – npm-basierter Build und Dokumentation vorhanden
+Node.js läuft auf Linux und bindet an `0.0.0.0` sowie `PORT` aus der Umgebung. Der Server liefert `dist/` als SPA aus, beantwortet `/health` und `/api/health` und stellt WebSockets über denselben HTTP-Port bereit. Der Client verbindet sich produktiv mit `ws://<host>/ws`.
 
 ## Entwicklungsregeln
 
