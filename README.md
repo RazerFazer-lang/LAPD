@@ -14,6 +14,12 @@ Der Produktionsserver läuft als Node.js-Anwendung unter Linux und wird über AM
 - HTTP + WebSocket: `ws://<server-ip>:7778/ws`
 - Healthcheck: `http://<server-ip>:7778/health`
 
+### 🖥️ Lokal öffnen
+
+**[▶ American Dispatch auf localhost:7778 öffnen](http://localhost:7778)**
+
+> Der Link funktioniert, wenn der Server auf deinem eigenen PC/Server läuft und Port `7778` verwendet.
+
 GitHub Pages ist nicht mehr der Produktionspfad.
 
 ## Feature-Reparatur
