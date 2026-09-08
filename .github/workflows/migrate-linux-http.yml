@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ github.sha == '6384262cc487ca93ed0cd226ab8b5360bef6c112' }}
+    if: ${{ !contains(github.event.head_commit.message, 'chore: migrate to Linux HTTP Node hosting') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -46,7 +46,6 @@ jobs:
           if old_import not in s:
               raise SystemExit('Expected node:path import was not found')
           s = s.replace(old_import, new_import, 1)
-
           marker = "const MAX_MESSAGE_BYTES=16*1024;"
           addition = """
           const PORT=Number(process.env.PORT??8787);
@@ -71,14 +70,11 @@ jobs:
               if marker not in s:
                   raise SystemExit('Server constants marker was not found')
               s=s.replace(marker, marker+addition, 1)
-
           pattern=r"const http=createServer\(\(req,res\)=>\{.*?\n\}\);"
-          replacement="const http=createServer((req,res)=>serveClient(req,res));"
-          s2,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
+          s2,n=re.subn(pattern,"const http=createServer((req,res)=>serveClient(req,res));",s,count=1,flags=re.S)
           if n!=1:
               raise SystemExit('HTTP createServer block was not found')
           s=s2
-
           s2,n=re.subn(r"http\.listen\([^;]+\);", "http.listen(PORT,HOST,()=>console.log(`American Dispatch server listening on ${HOST}:${PORT} · HTTP + WebSocket`));", s, count=1)
           if n!=1:
               raise SystemExit('http.listen call was not found')
