@@ -5,8 +5,12 @@ export const STATION_TYPE: Record<Service, FacilityType> = { POLICE: 'POLICE_STA
 export const STATION_NAME: Record<Service, string> = { POLICE: 'Police Station', FIRE: 'Fire Station', EMS: 'Rettungswache' };
 
 export function isValidBuildPosition(position: unknown): position is MapPoint {
-  const p = position as Partial<MapPoint> | null;
-  return !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
+  if (!position || typeof position !== 'object') return false;
+  const p = position as Record<string, unknown>;
+  const x = p.x;
+  const y = p.y;
+  return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100
+    && typeof y === 'number' && Number.isFinite(y) && y >= 0 && y <= 100;
 }
 
 export function stationType(service: Service): FacilityType {
