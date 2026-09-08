@@ -1,0 +1,41 @@
+name: Repair AMP runtime
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.event.head_commit.message != 'fix: repair AMP runtime'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Repair server bootstrap
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/index.ts')
+          s=p.read_text()
+          broken="const http=createServer((req,res)=>serveClient(req,res));res.end(JSON.stringify({name:'American Dispatch',status:'online',players:clients.size,facilities:state.facilities?.length??0,path:req.url}))});"
+          if broken in s:
+              s=s.replace(broken,"const http=createServer((req,res)=>serveClient(req,res));",1)
+          s=s.replace("const port=Number(process.env.PORT??8787);http.listen(PORT,HOST,","http.listen(PORT,HOST,")
+          s=s.replace("const PORT=Number(process.env.PORT??8787);","const PORT=Number(process.env.PORT??7778);")
+          p.write_text(s)
+          PY
+      - name: Generate lockfile
+        run: npm install --package-lock-only
+      - name: Verify
+        run: npm install && npm test && npm run build
+      - name: Commit repaired project
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/index.ts package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: repair AMP runtime'
+          git push
