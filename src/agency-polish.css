@@ -1,0 +1,28 @@
+/* Agency management UI: deliberately independent from the map stylesheet. */
+.rebuild-game .agency-page{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(340px,.65fr)!important;gap:24px!important;padding:32px!important;overflow:auto!important;background:linear-gradient(135deg,#081019 0%,#0b141e 55%,#0a1119 100%)!important}
+.rebuild-game .agency-card,.rebuild-game .unlock-card,.rebuild-game .aid-card{background:linear-gradient(180deg,#101b26,#0c151e)!important;border:1px solid #263746!important;border-radius:10px!important;box-shadow:0 18px 50px rgba(0,0,0,.22)!important}
+.rebuild-game .agency-card{padding:28px!important;min-width:0!important}
+.rebuild-game .agency-card>small,.rebuild-game .unlock-card>small{font-size:9px!important;letter-spacing:.16em!important;color:#6f8799!important;font-weight:800!important}
+.rebuild-game .agency-card h2{font-size:34px!important;line-height:1.05!important;margin:9px 0 10px!important;color:#f1f6fa!important}
+.rebuild-game .agency-card p{font-size:12px!important;line-height:1.6!important;color:#879aaa!important}
+.rebuild-game .rank-display{margin:20px 0!important;padding:18px 0!important}
+.rebuild-game .rank-display strong{font-size:21px!important;color:#edf4f8!important}
+.rebuild-game .rank-display span{font-size:10px!important}
+.rebuild-game .service-pills{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:9px!important;margin-top:18px!important}
+.rebuild-game .service-pills button{min-height:68px!important;text-align:left!important;padding:11px 12px!important;border-radius:7px!important;background:#0c151e!important;border:1px solid #2a3b4b!important;color:#9eafbd!important;transition:.16s ease!important}
+.rebuild-game .service-pills button:hover{transform:translateY(-1px)!important;border-color:#54738b!important;background:#111e29!important}
+.rebuild-game .service-pills button.active{background:#172838!important;border-color:#5b87ae!important;color:#f2f7fa!important;box-shadow:inset 0 2px 0 #5b87ae!important}
+.rebuild-game .service-pills button small{margin-top:7px!important;font-size:8px!important;color:#7f95a5!important}
+.rebuild-game .build{display:flex!important;justify-content:center!important;align-items:center!important;width:100%!important;max-width:none!important;margin-top:12px!important;border-radius:7px!important;padding:12px!important;background:#dce9f4!important;color:#071019!important;border:0!important;letter-spacing:.08em!important}
+.rebuild-game .build:hover{background:#fff!important;transform:translateY(-1px)!important}
+.rebuild-game .unlock-card{padding:22px!important}
+.rebuild-game .unlock-card>div{padding:13px 0!important;border-bottom:1px solid #1d2b37!important;font-size:11px!important}
+.rebuild-game .unlock-card>div:last-child{border-bottom:0!important}
+.rebuild-game .facility-manage{padding:14px 0!important;gap:10px!important}
+.rebuild-game .facility-manage div{min-width:0!important}
+.rebuild-game .facility-manage div b{font-size:11px!important;color:#e1eaf0!important}
+.rebuild-game .facility-manage span{font-size:9px!important;color:#708596!important}
+.rebuild-game .facility-manage button{background:#142331!important;color:#d5e3ec!important;border-color:#304656!important;border-radius:5px!important}
+.rebuild-game .agency-card .service-pills+button{position:relative}
+.rebuild-game .agency-page:after{content:'AGENCY MANAGEMENT · BUDGET · FLEET · PERSONNEL · UPGRADES';position:fixed;right:28px;bottom:16px;color:#415666;font-size:8px;letter-spacing:.14em;pointer-events:none}
+@media(max-width:1050px){.rebuild-game .agency-page{grid-template-columns:1fr!important;padding:20px!important}.rebuild-game .service-pills{grid-template-columns:1fr!important}}
