@@ -1,0 +1,120 @@
+name: Migrate to Linux HTTP Node hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, 'chore: migrate to Linux HTTP Node hosting') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Convert client to same-origin HTTP/WebSocket
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          s = p.read_text()
+          old = "const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`${location.protocol==='https:'?'wss':'ws'}://${location.hostname}:8787`:location.protocol==='https:'?'wss://ws.leitstelle.verion-digital.de':'ws://ws.leitstelle.verion-digital.de:8787');"
+          new = "const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`ws://${location.hostname}:8787`:`ws://${location.host}/ws`);"
+          if old not in s:
+              raise SystemExit('Expected App.tsx serverUrl line was not found')
+          p.write_text(s.replace(old, new))
+          PY
+
+      - name: Convert Node server to Linux/HTTP production server
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('server/index.ts')
+          s = p.read_text()
+          old_import = "import { dirname, resolve } from 'node:path';"
+          new_import = "import { dirname, extname, join, normalize, resolve } from 'node:path';"
+          if old_import not in s:
+              raise SystemExit('Expected node:path import was not found')
+          s = s.replace(old_import, new_import, 1)
+
+          marker = "const MAX_MESSAGE_BYTES=16*1024;"
+          addition = """
+          const PORT=Number(process.env.PORT??8787);
+          const HOST=process.env.HOST??'0.0.0.0';
+          const CLIENT_DIST=resolve(process.env.CLIENT_DIST??'dist');
+          const MIME:Record<string,string>={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.ico':'image/x-icon','.woff':'font/woff','.woff2':'font/woff2'};
+          function serveClient(req:any,res:any){
+            const pathname=decodeURIComponent(new URL(req.url??'/',`http://${req.headers.host??'localhost'}`).pathname);
+            if(pathname==='/health'||pathname==='/api/health'){
+              res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
+              res.end(JSON.stringify({name:'American Dispatch',status:'online',players:clients.size,facilities:state.facilities?.length??0}));
+              return;
+            }
+            const requested=normalize(join(CLIENT_DIST,pathname==='/'?'index.html':pathname));
+            const root=normalize(CLIENT_DIST);
+            const safe=requested===root||requested.startsWith(root+require('node:path').sep);
+            let file=safe?requested:join(CLIENT_DIST,'index.html');
+            try{if(!safe)throw new Error('unsafe path');const data=readFileSync(file);res.writeHead(200,{'content-type':MIME[extname(file).toLowerCase()]??'application/octet-stream','cache-control':file.endsWith('index.html')?'no-cache':'public, max-age=31536000, immutable'});res.end(data);}
+            catch{try{const data=readFileSync(join(CLIENT_DIST,'index.html'));res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});res.end(data);}catch{res.writeHead(503,{'content-type':'text/plain; charset=utf-8'});res.end('American Dispatch is starting.');}}
+          }
+          """
+          if addition.strip() not in s:
+              if marker not in s:
+                  raise SystemExit('Server constants marker was not found')
+              s=s.replace(marker, marker+addition, 1)
+
+          pattern=r"const http=createServer\(\(req,res\)=>\{.*?\n\}\);"
+          replacement="const http=createServer((req,res)=>serveClient(req,res));"
+          s2,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
+          if n!=1:
+              raise SystemExit('HTTP createServer block was not found')
+          s=s2
+
+          s2,n=re.subn(r"http\.listen\([^;]+\);", "http.listen(PORT,HOST,()=>console.log(`American Dispatch server listening on ${HOST}:${PORT} · HTTP + WebSocket`));", s, count=1)
+          if n!=1:
+              raise SystemExit('http.listen call was not found')
+          p.write_text(s)
+          PY
+
+      - name: Remove GitHub Pages production deployment
+        run: rm -f .github/workflows/deploy-pages.yml
+
+      - name: Update Vite config for same-origin HTTP development
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('vite.config.ts')
+          s=p.read_text()
+          s=s.replace("target: 'ws://127.0.0.1:8787',", "target: 'ws://127.0.0.1:8787',")
+          s=s.replace("rewrite: (path) => path.replace(/^\\/ws/, ''),", "rewrite: (path) => path.replace(/^\\/ws/, ''),")
+          p.write_text(s)
+          PY
+
+      - name: Update documentation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('README.md')
+          s=p.read_text()
+          s=s.replace('## [▶ Jetzt spielen](https://razerfazer-lang.github.io/LAPD/)', '## ▶ Produktionsbetrieb\n\nDas Spiel wird als Node.js-Webservice betrieben. Frontend und Multiplayer-WebSocket laufen über denselben HTTP-Host.')
+          s=s.replace('Die GitHub-Pages-Version startet direkt im lokalen Simulationsbetrieb. Für eine\ngemeinsame Multiplayer-Sitzung ist zusätzlich ein konfigurierter WebSocket-Server\nerforderlich.', 'GitHub Pages ist kein Produktionshost mehr. Node.js liefert den Vite-Build direkt aus und stellt den Multiplayer-WebSocket unter `/ws` bereit.')
+          s=s.replace('Die Client-Verbindung verwendet standardmäßig denselben Host auf Port `8787`.\nFür Reverse-Proxys oder getrennte Hosts kann `VITE_SERVER_URL` auf eine `ws://`\noder `wss://`-Adresse gesetzt werden.', 'Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host: `ws://<host>/ws`. Es werden für den aktuellen Betrieb ausschließlich HTTP und `ws://` verwendet.')
+          p.write_text(s)
+          PY
+
+      - name: Commit migration
+        run: |
+          git add src/App.tsx server/index.ts README.md vite.config.ts .github/workflows/deploy-pages.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: migrate to Linux HTTP Node hosting"
+          git push origin HEAD:main
