@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { cloneState, formatClock, type GameState, type Role, type Service } from '../src/game/state.ts';
+import { cloneState, formatClock, type GameState, type Role, type Service } from '../src/game/state';
 
 const state: GameState = cloneState();
 const clients = new Map<WebSocket, { id: string; name: string; role: Role }>();
@@ -9,7 +9,6 @@ let sequence = 0;
 function broadcast(message: unknown) { const payload = JSON.stringify(message); for (const socket of clients.keys()) if (socket.readyState === socket.OPEN) socket.send(payload); }
 function snapshot() { return { type: 'STATE_SNAPSHOT', payload: state }; }
 function authorized(client: {role:Role}, roles:Role[]) { return roles.includes(client.role); }
-function nearestAvailable(service: Service, point:{x:number;y:number}) { return state.units.filter(u=>u.service===service&&u.status==='AVAILABLE').sort((a,b)=>Math.hypot(a.position.x-point.x,a.position.y-point.y)-Math.hypot(b.position.x-point.x,b.position.y-point.y))[0]; }
 function dispatch(client:{role:Role}, unitId:string, incidentId:string) {
   if (!authorized(client,['SUPERVISOR','POLICE_DISPATCHER','FIRE_DISPATCHER','EMS_DISPATCHER','ADMIN'])) return;
   const u=state.units.find(x=>x.id===unitId); const i=state.incidents.find(x=>x.id===incidentId);
