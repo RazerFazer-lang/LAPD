@@ -1,0 +1,52 @@
+name: GitHub Pages Launcher
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Create launcher
+        run: |
+          mkdir -p site
+          cat > site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="de">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta http-equiv="refresh" content="0;url=http://gaminglive.mooo.com:7778/">
+            <title>American Dispatch</title>
+          </head>
+          <body style="margin:0;background:#07111c;color:#fff;font:16px system-ui;text-align:center;padding:12vh 20px">
+            <h1>AMERICAN DISPATCH</h1>
+            <p>Spiel wird geöffnet …</p>
+            <p><a href="http://gaminglive.mooo.com:7778/" style="color:#65b5ff">Spiel manuell öffnen</a></p>
+            <script>location.replace('http://gaminglive.mooo.com:7778/');</script>
+          </body>
+          </html>
+          EOF
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
