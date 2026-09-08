@@ -12,6 +12,7 @@ const meta:Record<Service,{name:string;station:string;color:string;cost:number}>
 const ranks:Record<Service,string[]>={POLICE:['Police Recruit','Police Officer I','Police Officer II','Police Officer III','Senior Police Officer','Corporal','Sergeant','Lieutenant','Captain','Commander','Deputy Chief','Assistant Chief','Chief of Police'],FIRE:['Firefighter Recruit','Firefighter I','Firefighter II','Firefighter III','Engineer / Driver','Lieutenant','Captain','Battalion Chief','Division Chief','Deputy Chief','Assistant Chief','Fire Chief'],EMS:['EMT','Advanced EMT','Paramedic','Senior Paramedic','Field Training Officer','Field Supervisor','Lieutenant','Captain','Division Chief','Deputy Director','Assistant Director','EMS Director']};
 const rankRewards:Record<Service,string[]>={POLICE:['Streifenwagen','zweite Einheit','mehr Personal','Traffic Unit','K9-Option','Sergeant-Führung','mehr Streifen','Detective/Investigation','Command Vehicle','Spezialfahrzeuge','größeres Budget','Sonderlagen','Behördenleitung'],FIRE:['Engine 1','zweite Engine','mehr Crew','Rescue Unit','Engineer-Posten','Lieutenant-Führung','Ladder Truck','Battalion Command','Sonderfahrzeuge','mehr Wachenbudget','Major Incident Command','Fire Chief Command'],EMS:['BLS Ambulance','ALS Ambulance','zweite Ambulance','mehr Crew','FTO-System','Supervisor Unit','mehr Fahrzeuge','MCI-Kapazität','Sondertransport','größeres Budget','Command Staff','EMS Command']};
 const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`${location.protocol==='https:'?'wss':'ws'}://${location.hostname}:8787`:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
+const ACCOUNT_TOKEN_KEY='ad-account-token-v1';
 let ws:WebSocket|null=null;
 function loadProfile(){try{return JSON.parse(localStorage.getItem('ad-profile-v5')??'null')}catch{return null}}
 function persist(p:unknown){localStorage.setItem('ad-profile-v5',JSON.stringify(p))}
@@ -45,7 +46,58 @@ export default function App(){
  const ownedFacilities=(game.facilities??[]).filter((f:any)=>f.ownerId===playerId);
  const incoming=((game as any).__aid??[]).filter((a:any)=>a.toPlayerId===playerId&&a.status==='PENDING');
  const send=(m:unknown)=>{if(ws?.readyState===WebSocket.OPEN){ws.send(JSON.stringify(m));return true}return false};
- useEffect(()=>{if(screen!=='GAME')return;let closed=false;let retry:number|undefined;const connect=()=>{if(closed)return;try{ws?.close();ws=new WebSocket(serverUrl);ws.onopen=()=>{if(closed)return;setConnected(true);setNotice('CAD ONLINE · Leitstelle verbunden.');ws?.send(JSON.stringify({type:'HELLO',name:profile.playerName,ready:true}))};ws.onclose=()=>{if(!closed){setConnected(false);ws=null;retry=window.setTimeout(connect,1500)}};ws.onerror=()=>setConnected(false);ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='HELLO_ACK'){setPlayerId(m.playerId);if(Number.isFinite(m.budget)){setProfile((p:any)=>{const n={...p,money:m.budget};persist(n);return n})}}if(m.type==='STATE_SNAPSHOT'&&m.payload){const next=m.payload as GameState;(next as any).__lobby=m.lobby;(next as any).__budget=m.payload.__budget;setGame(next);if(Number.isFinite(m.payload.__budget)){setProfile((p:any)=>{if(p.money===m.payload.__budget)return p;const n={...p,money:m.payload.__budget};persist(n);return n})}}if(m.type==='ACTION_RESULT'){setBuildPending(false);if(m.ok){if(Number.isFinite(m.budget)){setProfile((p:any)=>{const n={...p,money:m.budget};persist(n);return n})}if(m.action==='BUILD_FACILITY'){setBuildMode(null);playDispatchAlert()}setNotice(m.message??'Aktion erfolgreich.')}else setNotice(m.message??'Aktion vom Server abgelehnt.')}if(m.type==='MUTUAL_AID_SNAPSHOT')setGame(s=>{const n=structuredClone(s) as any;n.__aid=m.payload??[];return n});if(m.type==='ERROR'){setBuildPending(false);setNotice(m.message??'Serverfehler')}}catch{setNotice('Ungültige Serverantwort')}}};connect();return()=>{closed=true;if(retry)window.clearTimeout(retry);ws?.close();ws=null;setConnected(false)}},[screen]);
+ useEffect(()=>{
+  if(screen!=='GAME')return;
+  let closed=false;
+  let retry:number|undefined;
+  const connect=()=>{
+   if(closed)return;
+   try{
+    ws?.close();
+    ws=new WebSocket(serverUrl);
+    ws.onopen=()=>{
+     if(closed)return;
+     setConnected(true);
+     setNotice('CAD ONLINE · Leitstelle verbunden.');
+     const accountToken=localStorage.getItem(ACCOUNT_TOKEN_KEY);
+     ws?.send(JSON.stringify({type:'HELLO',name:profile.playerName,ready:true,...(accountToken?{accountToken}:{})}));
+    };
+    ws.onclose=()=>{
+     if(!closed){setConnected(false);ws=null;retry=window.setTimeout(connect,1500)}
+    };
+    ws.onerror=()=>setConnected(false);
+    ws.onmessage=e=>{
+     try{
+      const m=JSON.parse(e.data);
+      if(m.type==='HELLO_ACK'){
+       setPlayerId(m.playerId);
+       if(typeof m.accountToken==='string'&&/^[a-f0-9]{64}$/.test(m.accountToken))localStorage.setItem(ACCOUNT_TOKEN_KEY,m.accountToken);
+       if(Number.isFinite(m.budget))setProfile((p:any)=>{const n={...p,money:m.budget};persist(n);return n});
+      }
+      if(m.type==='STATE_SNAPSHOT'&&m.payload){
+       const next=m.payload as GameState;
+       (next as any).__lobby=m.lobby;
+       (next as any).__budget=m.payload.__budget;
+       setGame(next);
+       if(Number.isFinite(m.payload.__budget))setProfile((p:any)=>{if(p.money===m.payload.__budget)return p;const n={...p,money:m.payload.__budget};persist(n);return n});
+      }
+      if(m.type==='ACTION_RESULT'){
+       setBuildPending(false);
+       if(m.ok){
+        if(Number.isFinite(m.budget))setProfile((p:any)=>{const n={...p,money:m.budget};persist(n);return n});
+        if(m.action==='BUILD_FACILITY'){setBuildMode(null);playDispatchAlert()}
+        setNotice(m.message??'Aktion erfolgreich.');
+       }else setNotice(m.message??'Aktion vom Server abgelehnt.');
+      }
+      if(m.type==='MUTUAL_AID_SNAPSHOT')setGame(s=>{const n=structuredClone(s) as any;n.__aid=m.payload??[];return n});
+      if(m.type==='ERROR'){setBuildPending(false);setNotice(m.message??'Serverfehler')}
+     }catch{setNotice('Ungültige Serverantwort')}
+    };
+   }catch{setConnected(false)}
+  };
+  connect();
+  return()=>{closed=true;if(retry)window.clearTimeout(retry);ws?.close();ws=null;setConnected(false)};
+ },[screen,profile.playerName]);
  useEffect(()=>{if(active.length&&(!selected||!active.some(i=>i.id===selected)))setSelected(active[0].id)},[active,selected]);
  useEffect(()=>{if(active.some(i=>i.status==='NEW'))play911Incoming()},[active.length]);
  useEffect(()=>{if(!buildMode)return;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!buildPending){setBuildMode(null);setNotice('Bau abgebrochen.')}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[buildMode,buildPending]);
