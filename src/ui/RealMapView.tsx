@@ -7,76 +7,48 @@ import { playDispatchAlert, playRadioPing, playSiren, toggleAmbient } from '../g
 import './real-map.css';
 
 type Point={x:number;y:number};
-const serviceColor=(s:Service)=>s==='POLICE'?'#4da3ff':s==='FIRE'?'#ef535b':'#4fd39a';
-const facilityStyle:Record<Facility['type'],{icon:string;color:string}>={POLICE_STATION:{icon:'P',color:'#4da3ff'},FIRE_STATION:{icon:'F',color:'#ef535b'},HOSPITAL:{icon:'H',color:'#4fd39a'},SCHOOL:{icon:'S',color:'#e3bd67'},FUEL:{icon:'$',color:'#e3bd67'},SHOPPING:{icon:'M',color:'#c98be8'},INDUSTRIAL:{icon:'I',color:'#d47e68'},AIRPORT:{icon:'A',color:'#7da9d8'},RAIL:{icon:'R',color:'#aeb9c0'},PARK:{icon:'P',color:'#65b779'},BRIDGE:{icon:'B',color:'#d2aa65'}};
+const serviceColor=(s:Service)=>s==='POLICE'?'#4da3ff':s==='FIRE'?'#e94b55':'#43c99a';
+const facilityStyle:Record<Facility['type'],{icon:string;color:string}>={POLICE_STATION:{icon:'P',color:'#4da3ff'},FIRE_STATION:{icon:'F',color:'#e94b55'},HOSPITAL:{icon:'H',color:'#43c99a'},SCHOOL:{icon:'S',color:'#d8b45d'},FUEL:{icon:'$',color:'#d8b45d'},SHOPPING:{icon:'M',color:'#b987d7'},INDUSTRIAL:{icon:'I',color:'#c87967'},AIRPORT:{icon:'A',color:'#789cc2'},RAIL:{icon:'R',color:'#9aaab3'},PARK:{icon:'P',color:'#65a976'},BRIDGE:{icon:'B',color:'#c69d59'}};
 const bounds={west:-122.285,east:-122.185,south:37.455,north:37.535};
 const toLngLat=(p:Point):[number,number]=>[bounds.west+p.x/100*(bounds.east-bounds.west),bounds.north-p.y/100*(bounds.north-bounds.south)];
 
 function Vehicle({unit}:{unit:GameState['units'][number]}){
  const moving=unit.status==='EN_ROUTE'||unit.status==='RETURNING';
  const heading=unit.heading??(moving&&unit.target?Math.atan2(unit.target.y-unit.position.y,unit.target.x-unit.position.x)*180/Math.PI:0);
- const model=unit.vehicleModel??'';const suv=/Tahoe|Interceptor|Charger/i.test(model);const ladder=/Ladder|Truck/i.test(unit.type);
- return <div className={`rv ${unit.service.toLowerCase()} ${moving?'moving':''}`} style={{transform:`translate(-50%,-50%) rotate(${heading}deg)`}}>
-  <span className="rv-glow"/><span className="rv-body"><i className="rv-window"/>{suv&&<i className="rv-roof"/>}{ladder&&<i className="rv-ladder"/>}<i className="rv-wheel w1"/><i className="rv-wheel w2"/><i className="rv-wheel w3"/><i className="rv-wheel w4"/><i className="rv-light l1"/><i className="rv-light l2"/></span>
-  <b>{unit.callsign.replace('AMBULANCE','A').replace('PATROL','P').replace('ENGINE','E').replace('TRUCK','T').replace('BATTALION','B')}</b>
- </div>
+ const ladder=/Ladder|Truck/i.test(unit.type);const short=unit.callsign.replace('AMBULANCE','A').replace('PATROL','P').replace('ENGINE','E').replace('TRUCK','T').replace('BATTALION','B');
+ return <div className={`rv ${unit.service.toLowerCase()} ${moving?'moving':''}`} style={{transform:`translate(-50%,-50%) rotate(${heading}deg)`}}><span className="rv-glow"/><span className="rv-body"><i className="rv-window"/>{ladder&&<i className="rv-ladder"/>}<i className="rv-wheel w1"/><i className="rv-wheel w2"/><i className="rv-wheel w3"/><i className="rv-wheel w4"/><i className="rv-light l1"/><i className="rv-light l2"/></span><b>{short}</b></div>;
 }
 
 export function RealMapView({state,zoom,onZoomChange,onIncidentSelect}:{state:GameState;zoom:number;onZoomChange:(z:number)=>void;onIncidentSelect:(id:string)=>void}){
  const ref=useRef<HTMLDivElement|null>(null);const mapRef=useRef<Map|null>(null);
  const [ready,setReady]=useState(false);const [failed,setFailed]=useState(false);const [ambient,setAmbient]=useState(false);
- const [units,setUnits]=useState(true);const [incidents,setIncidents]=useState(true);const [poi,setPoi]=useState(true);const [traffic,setTraffic]=useState(true);const [,tick]=useState(0);
- const nodes=state.roads?.nodes??[];const edges=state.roads?.edges??[];const facilities=state.facilities??[];const active=state.incidents.filter(i=>!['COMPLETE','CANCELLED'].includes(i.status));
-
+ const [units,setUnits]=useState(true);const [incidents,setIncidents]=useState(true);const [poi,setPoi]=useState(true);const [traffic,setTraffic]=useState(false);const [,tick]=useState(0);
+ const facilities=state.facilities??[];const active=state.incidents.filter(i=>!['COMPLETE','CANCELLED'].includes(i.status));
  useEffect(()=>{
   if(!ref.current||mapRef.current)return;
   setWorkerUrl(workerUrl);
-  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/dark',center:[-122.235,37.49],zoom:12.7,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:false});
-  map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'bottom-right');
-  map.addControl(new ScaleControl({maxWidth:140,unit:'imperial'}),'bottom-left');
-  map.on('load',()=>{
-   setReady(true);map.resize();
-   for(const layer of map.getStyle().layers??[]){
-    if(layer.type==='symbol'&&/poi|housenumber|transit/i.test(layer.id)){try{map.setLayoutProperty(layer.id,'visibility','none')}catch{}}
-   }
-  });
-  map.on('move',()=>tick(v=>v+1));
-  map.on('error',(event)=>{const message=event?.error?.message?.toLowerCase()??'';if(message.includes('style')||message.includes('worker'))setFailed(true)});
-  mapRef.current=map;
-  return()=>{map.remove();mapRef.current=null}
+  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/liberty',center:[-122.235,37.49],zoom:12.7,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:false});
+  map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'bottom-right');map.addControl(new ScaleControl({maxWidth:140,unit:'imperial'}),'bottom-left');
+  map.on('load',()=>{setReady(true);map.resize();for(const layer of map.getStyle().layers??[]){if(layer.type==='symbol'&&/poi|housenumber|transit/i.test(layer.id)){try{map.setLayoutProperty(layer.id,'visibility','none')}catch{}}}});
+  map.on('move',()=>tick(v=>v+1));map.on('error',(event)=>{const m=event?.error?.message?.toLowerCase()??'';if(m.includes('style')||m.includes('worker'))setFailed(true)});mapRef.current=map;return()=>{map.remove();mapRef.current=null};
  },[]);
-
  useEffect(()=>{if(mapRef.current&&ready)mapRef.current.setZoom(12.15+Math.log2(Math.max(.7,zoom)))},[zoom,ready]);
- const routes=useMemo(()=>state.units.filter(u=>u.target&&(u.status==='EN_ROUTE'||u.status==='RETURNING')).map(u=>({a:toLngLat(u.position),b:toLngLat(u.target!),color:serviceColor(u.service)})),[state.units]);
- useEffect(()=>{
-  const map=mapRef.current;if(!map||!ready)return;
-  const data={type:'FeatureCollection',features:routes.map(r=>({type:'Feature',properties:{color:r.color},geometry:{type:'LineString',coordinates:[r.a,r.b]}}))};
-  const src=map.getSource('dispatch-routes') as any;
-  if(src){src.setData(data);return}
-  map.addSource('dispatch-routes',{type:'geojson',data} as any);
-  map.addLayer({id:'dispatch-routes-glow',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':7,'line-opacity':.16,'line-blur':3}} as any);
-  map.addLayer({id:'dispatch-routes',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':2.2,'line-opacity':.9,'line-dasharray':[1,1.5]}} as any);
- },[routes,ready]);
+ const routeFeatures=useMemo(()=>state.units.filter(u=>u.route&&u.route.length>1&&(u.status==='EN_ROUTE'||u.status==='RETURNING')).map(u=>({color:serviceColor(u.service),coordinates:u.route!.map(toLngLat)})),[state.units]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const data={type:'FeatureCollection',features:routeFeatures.map(r=>({type:'Feature',properties:{color:r.color},geometry:{type:'LineString',coordinates:r.coordinates}}))};const src=map.getSource('dispatch-routes') as any;if(src){src.setData(data);return}map.addSource('dispatch-routes',{type:'geojson',data} as any);map.addLayer({id:'dispatch-routes-glow',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':7,'line-opacity':.12,'line-blur':4}} as any);map.addLayer({id:'dispatch-routes',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':2,'line-opacity':.78,'line-dasharray':[1.2,1.8]}} as any)},[routeFeatures,ready]);
  const project=(p:Point)=>mapRef.current?.project(toLngLat(p));
  const select=(id:string)=>{playRadioPing();playDispatchAlert();onIncidentSelect(id)};
  return <div className="map-shell real-cad-map">
-  <div className="real-toolbar">
-   <button onClick={()=>onZoomChange(Math.min(3,zoom+.25))}>＋</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>onZoomChange(Math.max(.65,zoom-.25))}>−</button><button onClick={()=>onZoomChange(1)}>⌂</button>
-   <i className="toolbar-sep"/>
-   <button className={units?'on':''} onClick={()=>setUnits(v=>!v)}>UNITS</button><button className={incidents?'on':''} onClick={()=>setIncidents(v=>!v)}>911</button><button className={poi?'on':''} onClick={()=>setPoi(v=>!v)}>POI</button><button className={traffic?'on':''} onClick={()=>setTraffic(v=>!v)}>TRAFFIC</button>
-   <i className="toolbar-sep"/><button className={ambient?'on':''} onClick={()=>setAmbient(toggleAmbient())}>♫</button><button onClick={playRadioPing}>RADIO</button><button onClick={playSiren}>SIREN</button>
-  </div>
+  <div className="real-toolbar"><button onClick={()=>onZoomChange(Math.min(3,zoom+.25))}>＋</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>onZoomChange(Math.max(.65,zoom-.25))}>−</button><button onClick={()=>onZoomChange(1)}>⌂</button><i className="toolbar-sep"/><button className={units?'on':''} onClick={()=>setUnits(v=>!v)}>UNITS</button><button className={incidents?'on':''} onClick={()=>setIncidents(v=>!v)}>911</button><button className={poi?'on':''} onClick={()=>setPoi(v=>!v)}>POI</button><button className={traffic?'on':''} onClick={()=>setTraffic(v=>!v)}>TRAFFIC</button><i className="toolbar-sep"/><button className={ambient?'on':''} onClick={()=>setAmbient(toggleAmbient())}>♫</button><button onClick={playRadioPing}>RADIO</button><button onClick={playSiren}>SIREN</button></div>
   <div className="real-status"><div><b>REDWOOD METRO COUNTY</b><small>PUBLIC SAFETY CAD</small></div><span>{state.world.weather} · TRAFFIC {state.world.traffic}% · {state.world.nightFactor?'NIGHT':'DAY'}</span></div>
   <div className="map-corner north">N<br/><span>↑</span></div><div className="map-corner coords">37.4900° N<br/>122.2350° W</div>
-  <div ref={ref} className={`real-map-canvas ${failed?'failed':''}`}/>
-  {failed&&<div className="map-fallback-message">BASEMAP UNAVAILABLE · CHECK NETWORK / TILE SERVICE</div>}
+  <div ref={ref} className={`real-map-canvas ${failed?'failed':''}`}/>{failed&&<div className="map-fallback-message">BASEMAP UNAVAILABLE · CHECK NETWORK / TILE SERVICE</div>}
   <div className="real-overlay">
-   {traffic&&ready&&edges.map(e=>{const a=nodes.find(n=>n.id===e.from)?.position,b=nodes.find(n=>n.id===e.to)?.position;if(!a||!b)return null;const p=project({x:(a.x+b.x)/2,y:(a.y+b.y)/2});if(!p)return null;return <span key={e.id} className={`traffic-badge ${e.traffic>70?'hot':''}`} style={{left:p.x,top:p.y}}>{e.traffic}%</span>})}
-   {poi&&ready&&facilities.map(f=>{const p=project(f.position);if(!p)return null;const s=facilityStyle[f.type];return <button key={f.id} className="poi-badge" style={{left:p.x,top:p.y,borderColor:s.color}} onClick={playRadioPing} title={f.name}><span style={{color:s.color}}>{s.icon}</span><small>{f.name}</small></button>})}
-   {incidents&&ready&&active.map(i=>{const p=project(i.location);if(!p)return null;const critical=i.priority===1;return <button key={i.id} className={`incident-badge ${critical?'critical':''}`} style={{left:p.x,top:p.y}} onClick={()=>select(i.id)}><span/><b>{i.id}</b><small>P{i.priority} · {i.type}</small></button>})}
+   {traffic&&<div className="traffic-panel"><b>TRAFFIC</b><span>{state.world.traffic}% NETWORK LOAD</span><i style={{width:`${state.world.traffic}%`}}/></div>}
+   {poi&&ready&&facilities.map(f=>{const p=project(f.position);if(!p)return null;const s=facilityStyle[f.type];return <button key={f.id} className="poi-badge" style={{left:p.x,top:p.y,borderColor:s.color}} onClick={playRadioPing} title={f.name}><span style={{color:s.color}}>{s.icon}</span></button>})}
+   {incidents&&ready&&active.map(i=>{const p=project(i.location);if(!p)return null;const critical=i.priority===1;return <button key={i.id} className={`incident-badge ${critical?'critical':''}`} style={{left:p.x,top:p.y}} onClick={()=>select(i.id)}><span/><b>{i.id}</b><small>P{i.priority}</small></button>})}
    {units&&ready&&state.units.map(u=>{const p=project(u.position);if(!p)return null;return <div key={u.id} className="rv-wrap" style={{left:p.x,top:p.y}}><Vehicle unit={u}/></div>})}
   </div>
   <div className="real-legend"><span><i className="dot police"/> POLICE</span><span><i className="dot fire"/> FIRE</span><span><i className="dot ems"/> EMS</span><span><i className="dot incident"/> 911</span><span>© OpenStreetMap · OpenFreeMap</span></div>
-  <div className="real-footer"><b>LIVE CAD</b> · {state.units.length} UNITS · {active.length} ACTIVE · REAL ROAD BASEMAP · SIMULATION OVERLAY</div>
+  <div className="real-footer"><b>LIVE CAD</b> · {state.units.length} UNITS · {active.length} ACTIVE · ROAD-NETWORK ROUTING</div>
  </div>;
 }
