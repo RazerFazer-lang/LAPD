@@ -2,7 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/LAPD/' : '/',
+  // The production site uses the custom domain leitstelle.verion-digital.de,
+  // so assets must resolve from the domain root instead of /LAPD/.
+  base: '/',
   plugins: [react()],
   server: {
     port: 5173,
