@@ -2,155 +2,42 @@ import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { cloneState, formatClock, type GameState, type Role, type Service } from '../src/game/state';
+import { cloneState, formatClock, type GameState, type Role, type Service, type MapPoint, type RoadNode } from '../src/game/state';
 
-const roles: Role[] = ['CALL_TAKER','POLICE_DISPATCHER','FIRE_DISPATCHER','EMS_DISPATCHER','SUPERVISOR','MANAGER','ADMIN'];
-const dispatchToken = process.env.DISPATCH_TOKEN;
-const adminToken = process.env.ADMIN_TOKEN;
-const savePath = resolve(process.env.SAVE_FILE ?? 'data/game-state.json');
-const clients = new Map<WebSocket, { id: string; name: string; role: Role }>();
-
-function isGameState(value: unknown): value is GameState {
-  const candidate = value as Partial<GameState> | null;
-  return !!candidate && candidate.version === 2 && Array.isArray(candidate.units) && Array.isArray(candidate.incidents)
-    && Array.isArray(candidate.personnel) && Array.isArray(candidate.hospitals) && !!candidate.center && !!candidate.finance && !!candidate.world;
-}
-function loadState(): GameState {
-  try {
-    const saved = JSON.parse(readFileSync(savePath, 'utf8')) as unknown;
-    if (isGameState(saved)) return saved;
-  } catch { /* No valid save exists yet; start a new dispatch center. */ }
-  return cloneState();
-}
-let state: GameState = loadState();
-let sequence = Math.max(0, ...state.incidents.map(incident => Number(incident.id.replace('INC-', '')) || 0)) + 1;
-function persistState() {
-  try {
-    mkdirSync(dirname(savePath), { recursive: true });
-    const temporaryPath = `${savePath}.tmp`;
-    writeFileSync(temporaryPath, JSON.stringify(state), 'utf8');
-    renameSync(temporaryPath, savePath);
-  } catch (error) { console.error('Unable to persist game state', error); }
-}
-
-function broadcast(message: unknown) { const payload = JSON.stringify(message); for (const socket of clients.keys()) if (socket.readyState === socket.OPEN) socket.send(payload); }
-function snapshot() { return { type: 'STATE_SNAPSHOT', payload: state }; }
-function authorized(client: {role:Role}, roles:Role[]) { return roles.includes(client.role); }
-function sendError(socket: WebSocket, message: string) { socket.send(JSON.stringify({ type: 'ERROR', message })); }
-function roleForHello(requestedRole: unknown, token: unknown, requestedAdminToken: unknown): Role {
-  if (!roles.includes(requestedRole as Role)) return 'CALL_TAKER';
-  if (requestedRole === 'ADMIN') return adminToken && requestedAdminToken === adminToken ? 'ADMIN' : 'CALL_TAKER';
-  return dispatchToken && token === dispatchToken ? requestedRole as Role : 'CALL_TAKER';
-}
-function dispatch(client:{role:Role}, unitId:string, incidentId:string) {
-  if (!authorized(client,['SUPERVISOR','POLICE_DISPATCHER','FIRE_DISPATCHER','EMS_DISPATCHER','ADMIN'])) return false;
-  const u=state.units.find(x=>x.id===unitId); const i=state.incidents.find(x=>x.id===incidentId);
-  if(!u||!i||u.status!=='AVAILABLE') return false;
-  if(client.role==='POLICE_DISPATCHER'&&u.service!=='POLICE' || client.role==='FIRE_DISPATCHER'&&u.service!=='FIRE' || client.role==='EMS_DISPATCHER'&&u.service!=='EMS') return false;
-  u.status='EN_ROUTE'; u.target=i.location; u.assignedIncidentId=i.id; i.status='RESPONDING'; i.unitIds=[...new Set([...i.unitIds,u.id])];
-  state.eventLog=[`${formatClock(state.simulationMinutes)} · ${u.callsign} → ${i.id}`,...state.eventLog].slice(0,18);
-  return true;
-}
-function complete(client:{role:Role}, incidentId:string) {
-  if(!authorized(client,['SUPERVISOR','ADMIN','EMS_DISPATCHER','FIRE_DISPATCHER','POLICE_DISPATCHER'])) return false;
-  const i=state.incidents.find(x=>x.id===incidentId); if(!i||i.status==='COMPLETE'||i.status==='CANCELLED') return false;
-  i.status='COMPLETE'; state.statistics.completed++; state.center.reputation=Math.min(100,state.center.reputation+0.35); state.finance.revenueToday+=500+i.priority*180;
-  for(const u of state.units) if(i.unitIds.includes(u.id)){u.status='RETURNING';u.target={x:50,y:50};u.assignedIncidentId=undefined;}
-  return true;
-}
-function buyAmbulance(client:{role:Role}) {
-  const price=78000;
-  if(!authorized(client,['MANAGER','ADMIN']) || state.center.money<price) return false;
-  const number=state.units.filter(unit=>unit.service==='EMS').length+3;
-  state.center.money-=price; state.finance.upgrades+=price;
-  state.units.push({id:`EMS-A${number}`,callsign:`AMBULANCE ${number}`,service:'EMS',type:'ALS Ambulance',status:'AVAILABLE',position:{x:72,y:60},speed:1.9,crew:3,capabilities:['ALS','TRANSPORT'],maintenance:100,fuel:100});
-  return true;
-}
-function hireDispatcher(client:{role:Role}) {
-  const price=2500;
-  if(!authorized(client,['MANAGER','ADMIN']) || state.center.money<price) return false;
-  const number=state.personnel.length+1;
-  state.center.money-=price; state.finance.payroll+=price;
-  state.personnel.push({id:`P-${String(number).padStart(2,'0')}`,name:`Dispatcher ${number}`,role:'CALL_TAKER',experience:55,stress:12,salary:4800,performance:80,errorRate:6,shift:'AFTERNOON',active:true});
-  return true;
-}
-function setWeather(client:{role:Role}, weather: unknown) {
-  const valid=['CLEAR','CLOUDY','RAIN','HEAVY_RAIN','THUNDERSTORM','FOG','SNOW','HEATWAVE','WINDSTORM'];
-  if(!authorized(client,['ADMIN']) || !valid.includes(weather as string)) return false;
-  state.world.weather=weather as GameState['world']['weather']; return true;
-}
-function setTime(client:{role:Role}, minutes: unknown) {
-  if(!authorized(client,['ADMIN']) || !Number.isInteger(minutes) || (minutes as number)<0 || (minutes as number)>=1440) return false;
-  state.simulationMinutes=minutes as number; return true;
-}
-function releaseUnits(client:{role:Role}) {
-  if(!authorized(client,['ADMIN'])) return false;
-  for(const unit of state.units){unit.status='AVAILABLE';unit.assignedIncidentId=undefined;unit.target=undefined;}
-  return true;
-}
-function addBudget(client:{role:Role}) {
-  if(!authorized(client,['ADMIN'])) return false;
-  state.center.money+=50000; return true;
-}
-function resetGame(client:{role:Role}) {
-  if(!authorized(client,['ADMIN'])) return false;
-  state=cloneState(); sequence=Math.max(0,...state.incidents.map(incident=>Number(incident.id.replace('INC-',''))||0))+1;
-  return true;
-}
-function generate(client:{role:Role}) {
-  if(!authorized(client,['SUPERVISOR','CALL_TAKER','ADMIN'])) return false;
-  const types=[{type:'MEDICAL' as const,service:'EMS' as Service,name:'Bewusstlose Person'},{type:'FIRE' as const,service:'FIRE' as Service,name:'Rauchentwicklung'},{type:'POLICE' as const,service:'POLICE' as Service,name:'Einbruch'},{type:'TRAFFIC' as const,service:'POLICE' as Service,name:'Verkehrsunfall'},{type:'HAZMAT' as const,service:'FIRE' as Service,name:'Gefahrstoffaustritt'},{type:'WILDFIRE' as const,service:'FIRE' as Service,name:'Vegetationsbrand'}];
-  const pick=types[Math.floor(Math.random()*types.length)]; const n=1050+sequence++; const id=`INC-${n}`; const location={x:12+Math.random()*76,y:10+Math.random()*80};
-  state.incidents.push({id,type:pick.type,priority:(1+Math.floor(Math.random()*3)) as 1|2|3,location,address:['Pine Street','Market Avenue','Canyon Road','Harbor Drive'][Math.floor(Math.random()*4)]+' '+(100+Math.floor(Math.random()*1800)),status:'NEW',summary:pick.name,createdAt:Date.now(),ageMinutes:0,stageIndex:0,stages:[pick.name,'Weitere Kräfte erforderlich','Lage stabilisiert'],requiredServices:pick.type==='TRAFFIC'?['POLICE','EMS']:[pick.service],unitIds:[],patients:pick.type==='MEDICAL'?1:0,escalation:20+Math.random()*35,danger:20+Math.random()*70,objective:'Lage bewerten und passende Einheiten disponieren'});
-  state.statistics.calls++; state.eventLog=[`${formatClock(state.simulationMinutes)} · ${id} · Neuer 911-Einsatz`,...state.eventLog].slice(0,18);
-  return true;
-}
-function tick(){
-  state.serverTime=Date.now(); state.simulationMinutes=(state.simulationMinutes+1)%1440; state.world.hour=Math.floor(state.simulationMinutes/60); state.world.minute=state.simulationMinutes%60;
-  state.world.traffic=Math.max(8,Math.min(95,Math.round(45+Math.sin(state.simulationMinutes/55)*22+(state.world.weather==='RAIN'?12:0))));
-  for(const i of state.incidents){ if(i.status==='COMPLETE'||i.status==='CANCELLED') continue; i.ageMinutes+=1/60; i.escalation=Math.min(100,i.escalation+0.05); if(i.escalation>78&&i.stageIndex<i.stages.length-1){i.stageIndex++;i.summary=i.stages[i.stageIndex];i.priority=Math.max(1,i.priority-1) as 1|2|3|4;} }
-  for(const u of state.units){
-    if((u.status!=='EN_ROUTE'&&u.status!=='RETURNING')||!u.target) continue;
-    const d=Math.hypot(u.position.x-u.target.x,u.position.y-u.target.y);
-    if(d<=0.7){
-      u.position={...u.target};
-      u.status=u.status==='RETURNING'?'AVAILABLE':'ON_SCENE';
-      u.target=undefined;
-    }else{
-      const step=Math.min(d,u.speed/10); const r=step/d;
-      u.position={x:u.position.x+(u.target.x-u.position.x)*r,y:u.position.y+(u.target.y-u.position.y)*r};
-    }
-  }
-}
-
-const http=createServer((_req,res)=>{res.writeHead(200,{'content-type':'application/json; charset=utf-8'});res.end(JSON.stringify({name:'American Dispatch',region:state.center.region,version:state.version,players:clients.size,status:'online'}));});
-const wss=new WebSocketServer({server:http});
-wss.on('connection',(socket)=>{
-  const client={id:`player-${Date.now()}-${clients.size}`,name:'Dispatcher',role:'CALL_TAKER' as Role}; clients.set(socket,client); socket.send(JSON.stringify(snapshot()));
-  socket.on('message',(raw)=>{try{const msg=JSON.parse(raw.toString()) as {type?:string;unitId?:string;incidentId?:string;name?:string;role?:Role;token?:string;adminToken?:string;weather?:string;minutes?:number}; let changed=false;
-    if(msg.type==='HELLO'){
-      client.name=typeof msg.name==='string'?msg.name.slice(0,32):client.name;
-      client.role=roleForHello(msg.role,msg.token,msg.adminToken);
-      socket.send(JSON.stringify({type:'SESSION',role:client.role,secured:Boolean(dispatchToken)}));
-    }
-    else if(msg.type==='DISPATCH'&&msg.unitId&&msg.incidentId){changed=dispatch(client,msg.unitId,msg.incidentId);}
-    else if(msg.type==='COMPLETE'&&msg.incidentId){changed=complete(client,msg.incidentId);}
-    else if(msg.type==='GENERATE_INCIDENT'){changed=generate(client);}
-    else if(msg.type==='BUY_AMBULANCE'){changed=buyAmbulance(client);}
-    else if(msg.type==='HIRE_DISPATCHER'){changed=hireDispatcher(client);}
-    else if(msg.type==='SET_WEATHER'){changed=setWeather(client,msg.weather);}
-    else if(msg.type==='SET_TIME'){changed=setTime(client,msg.minutes);}
-    else if(msg.type==='RELEASE_UNITS'){changed=releaseUnits(client);}
-    else if(msg.type==='ADD_BUDGET'){changed=addBudget(client);}
-    else if(msg.type==='RESET_GAME'){changed=resetGame(client);}
-    else if(msg.type==='PING'){socket.send(JSON.stringify({type:'PONG',serverTime:Date.now()})); return;}
-    else { sendError(socket,'Unbekannte oder unvollständige Aktion'); return; }
-    if(!changed && msg.type!=='HELLO') sendError(socket,'Aktion nicht autorisiert oder nicht möglich');
-    if(changed) persistState();
-    broadcast(snapshot());
-  }catch{socket.send(JSON.stringify({type:'ERROR',message:'Ungültige Nachricht'}));}});
-  socket.on('close',()=>clients.delete(socket));
-});
-setInterval(()=>{tick();broadcast(snapshot());},1000);
-setInterval(persistState,60000);
-const port=Number(process.env.PORT??8787); http.listen(port,()=>console.log(`American Dispatch server listening on :${port}`));
+const roles:Role[]=['CALL_TAKER','POLICE_DISPATCHER','FIRE_DISPATCHER','EMS_DISPATCHER','SUPERVISOR','MANAGER','ADMIN'];
+const dispatchToken=process.env.DISPATCH_TOKEN; const adminToken=process.env.ADMIN_TOKEN; const savePath=resolve(process.env.SAVE_FILE??'data/game-state.json');
+const clients=new Map<WebSocket,{id:string;name:string;role:Role;ready:boolean;lastSeen:number}>();
+let lobby={id:'REDWOOD-1',name:'Redwood Metro Multiplayer',hostId:'',players:[] as Array<{id:string;name:string;role:Role;ready:boolean;connected:boolean}>,maxPlayers:8};
+function isGameState(v:unknown):v is GameState{const c=v as Partial<GameState>|null;return !!c&&c.version===2&&Array.isArray(c.units)&&Array.isArray(c.incidents)&&Array.isArray(c.personnel)&&Array.isArray(c.hospitals)&&!!c.center&&!!c.finance&&!!c.world}
+function loadState(){try{const s=JSON.parse(readFileSync(savePath,'utf8')) as unknown;if(isGameState(s))return s}catch{}return cloneState()}
+let state:GameState=loadState(); let sequence=Math.max(0,...state.incidents.map(i=>Number(i.id.replace('INC-',''))||0))+1;
+function persistState(){try{mkdirSync(dirname(savePath),{recursive:true});const t=`${savePath}.tmp`;writeFileSync(t,JSON.stringify(state),'utf8');renameSync(t,savePath)}catch(e){console.error('persist',e)}}
+function broadcast(message:unknown){const p=JSON.stringify(message);for(const s of clients.keys())if(s.readyState===s.OPEN)s.send(p)}
+function snapshot(){return {type:'STATE_SNAPSHOT',payload:state,lobby}}
+function err(s:WebSocket,m:string){s.send(JSON.stringify({type:'ERROR',message:m}))}
+function authorized(c:{role:Role},r:Role[]){return r.includes(c.role)}
+function roleForHello(r:unknown,t:unknown,a:unknown):Role{if(!roles.includes(r as Role))return 'CALL_TAKER';if(r==='ADMIN')return adminToken&&a===adminToken?'ADMIN':'CALL_TAKER';return dispatchToken&&t===dispatchToken?r as Role:'CALL_TAKER'}
+function nearestNode(p:MapPoint){const ns=state.roads?.nodes??[];return ns.reduce<RoadNode|null>((best,n)=>!best||Math.hypot(n.position.x-p.x,n.position.y-p.y)<Math.hypot(best.position.x-p.x,best.position.y-p.y)?n:best,null)}
+function route(from:MapPoint,to:MapPoint):MapPoint[]{const roads=state.roads;if(!roads)return [from,to];const start=nearestNode(from),goal=nearestNode(to);if(!start||!goal)return [from,to];const dist=new Map<string,number>(),prev=new Map<string,string>();const open=new Set<string>([start.id]);for(const n of roads.nodes)dist.set(n.id,Infinity);dist.set(start.id,0);while(open.size){let cur=[...open].sort((a,b)=>(dist.get(a)??Infinity)-(dist.get(b)??Infinity))[0];open.delete(cur);if(cur===goal.id)break;for(const e of roads.edges.filter(e=>e.from===cur&&!e.blocked)){const traffic=1+(e.traffic/100);const a=roads.nodes.find(n=>n.id===e.from)!.position,b=roads.nodes.find(n=>n.id===e.to)!.position;const w=Math.hypot(a.x-b.x,a.y-b.y)*traffic;const nd=(dist.get(cur)??Infinity)+w;if(nd<(dist.get(e.to)??Infinity)){dist.set(e.to,nd);prev.set(e.to,cur);open.add(e.to)}}}const ids:string[]=[];let at=goal.id;ids.push(at);while(at!==start.id&&prev.has(at)){at=prev.get(at)!;ids.push(at)}ids.reverse();return [from,...ids.map(id=>roads.nodes.find(n=>n.id===id)!.position),to]}
+function dispatch(c:{role:Role},unitId:string,incidentId:string){if(!authorized(c,['SUPERVISOR','POLICE_DISPATCHER','FIRE_DISPATCHER','EMS_DISPATCHER','ADMIN']))return false;const u=state.units.find(x=>x.id===unitId),i=state.incidents.find(x=>x.id===incidentId);if(!u||!i||u.status!=='AVAILABLE')return false;if(c.role==='POLICE_DISPATCHER'&&u.service!=='POLICE'||c.role==='FIRE_DISPATCHER'&&u.service!=='FIRE'||c.role==='EMS_DISPATCHER'&&u.service!=='EMS')return false;u.status='EN_ROUTE';u.target=i.location;u.route=route(u.position,i.location);u.routeIndex=0;u.assignedIncidentId=i.id;i.status='RESPONDING';i.unitIds=[...new Set([...i.unitIds,u.id])];state.eventLog=[`${formatClock(state.simulationMinutes)} · ${u.callsign} → ${i.id} · ROUTE ${u.route.length} Punkte`,...state.eventLog].slice(0,20);return true}
+function complete(c:{role:Role},id:string){if(!authorized(c,['SUPERVISOR','ADMIN','EMS_DISPATCHER','FIRE_DISPATCHER','POLICE_DISPATCHER']))return false;const i=state.incidents.find(x=>x.id===id);if(!i||['COMPLETE','CANCELLED'].includes(i.status))return false;i.status='COMPLETE';state.statistics.completed++;if(i.type==='MEDICAL'||i.type==='MCI')state.statistics.patientsSaved=(state.statistics.patientsSaved??0)+Math.max(1,Math.round(i.patients*.7));if(i.type==='FIRE'||i.type==='MASS_FIRE')state.statistics.firesControlled++;if(i.type==='MCI'||i.type==='MASS_FIRE'||i.type==='ACTIVE_THREAT')state.statistics.majorIncidents=(state.statistics.majorIncidents??0)+1;state.center.reputation=Math.min(100,state.center.reputation+.35);state.finance.revenueToday+=500+i.priority*180;for(const u of state.units)if(i.unitIds.includes(u.id)){u.status='RETURNING';u.route=route(u.position,{x:50,y:50});u.routeIndex=0;u.target={x:50,y:50};u.assignedIncidentId=undefined}return true}
+function generate(c:{role:Role}){if(!authorized(c,['SUPERVISOR','CALL_TAKER','ADMIN']))return false;const types:[GameState['incidents'][number]['type'],string,Service[]][]=[['MEDICAL','Bewusstlose Person',['EMS']],['FIRE','Wohnungsbrand',['FIRE','EMS']],['POLICE','Einbruch',['POLICE']],['TRAFFIC','Schwerer Verkehrsunfall',['POLICE','EMS']],['HAZMAT','Gefahrstoffaustritt',['FIRE','POLICE','EMS']],['WILDFIRE','Vegetationsbrand',['FIRE','EMS']],['MCI','Massenanfall Verletzter',['FIRE','EMS','POLICE']],['FLOOD','Überflutung',['FIRE','EMS']],['MASS_FIRE','Großbrand im Industriegebiet',['FIRE','EMS','POLICE']],['ACTIVE_THREAT','Amok-/Bedrohungslage',['POLICE','EMS']];const [type,name,services]=types[Math.floor(Math.random()*types.length)];const id=`INC-${1050+sequence++}`;const x=12+Math.random()*76,y=10+Math.random()*80;const major=['MCI','MASS_FIRE','ACTIVE_THREAT'].includes(type);state.incidents.push({id,type,priority:(major?1:1+Math.floor(Math.random()*3)) as 1|2|3,location:{x,y},address:['Pine Street','Market Avenue','Canyon Road','Harbor Drive','8th Avenue'][Math.floor(Math.random()*5)]+' '+(100+Math.floor(Math.random()*1800)),status:'NEW',summary:name,createdAt:Date.now(),ageMinutes:0,stageIndex:0,stages:major?[name,'Großlage erkannt','Einsatzleitung etabliert','Lage stabilisiert']:[name,'Weitere Kräfte erforderlich','Lage stabilisiert'],requiredServices:services,unitIds:[],patients:type==='MCI'?15+Math.floor(Math.random()*30):type==='MEDICAL'?1+Math.floor(Math.random()*3):type==='TRAFFIC'?2:0,escalation:major?55:20+Math.random()*30,danger:major?75:20+Math.random()*65,objective:major?'Einsatzleitung aufbauen, Abschnitte bilden und Ressourcen koordinieren':'Lage bewerten und passende Einheiten disponieren',commandPost:major?{x:x+3,y:y+2}:undefined,sections:major?[{id:'SEC-A',name:'Triage / Rettung',objective:'Verletzte versorgen',unitIds:[]},{id:'SEC-B',name:'Sicherung',objective:'Gefahrenbereich sichern',unitIds:[]}]:undefined});state.statistics.calls++;state.eventLog=[`${formatClock(state.simulationMinutes)} · ${id} · ${major?'GROSSLAGE':'Neuer 911-Einsatz'}`,...state.eventLog].slice(0,20);return true}
+function buyAmbulance(c:{role:Role}){const price=78000;if(!authorized(c,['MANAGER','ADMIN'])||state.center.money<price)return false;const n=state.units.filter(u=>u.service==='EMS').length+3;state.center.money-=price;state.finance.upgrades+=price;state.finance.fleetValue=(state.finance.fleetValue??0)+price;state.units.push({id:`EMS-A${n}`,callsign:`AMBULANCE ${n}`,service:'EMS',type:'ALS Ambulance',status:'AVAILABLE',position:{x:72,y:60},speed:1.65,crew:3,capabilities:['ALS','TRANSPORT'],maintenance:100,fuel:100,vehicleModel:'Ford F-450 Type I Ambulance',lightPattern:'TRIPLE'});return true}
+function hire(c:{role:Role}){if(!authorized(c,['MANAGER','ADMIN'])||state.center.money<2500)return false;const n=state.personnel.length+1;state.center.money-=2500;state.finance.payroll+=2500;state.personnel.push({id:`P-${String(n).padStart(2,'0')}`,name:`Dispatcher ${n}`,role:'CALL_TAKER',experience:55,stress:12,salary:4800,performance:80,errorRate:6,shift:'AFTERNOON',active:true,certifications:['Grundausbildung'],training:55,fatigue:10,overtimeHours:0});return true}
+function tick(){state.serverTime=Date.now();state.simulationMinutes=(state.simulationMinutes+1)%1440;state.world.hour=Math.floor(state.simulationMinutes/60);state.world.minute=state.simulationMinutes%60;const night=state.simulationMinutes<360||state.simulationMinutes>1260;state.world.nightFactor=night?1:0;state.world.traffic=Math.max(5,Math.min(98,Math.round(42+Math.sin(state.simulationMinutes/55)*24+(state.world.weather==='RAIN'?13:0)+(night?-15:0))));state.world.eventRate=1+state.world.traffic/150;for(const e of state.roads?.edges??[]){e.traffic=Math.max(4,Math.min(99,Math.round(state.world.traffic+(Math.sin(state.simulationMinutes/18+Number(e.id.slice(1)))*13))));if(e.traffic>92)e.blocked=Math.random()<.015}for(const i of state.incidents){if(i.status==='COMPLETE'||i.status==='CANCELLED')continue;i.ageMinutes+=1/60;i.escalation=Math.min(100,i.escalation+(i.status==='NEW'?.12:.04));if(i.escalation>78&&i.stageIndex<i.stages.length-1){i.stageIndex++;i.summary=i.stages[i.stageIndex];i.priority=Math.max(1,i.priority-1) as 1|2|3|4;state.eventLog=[`${formatClock(state.simulationMinutes)} · ${i.id} · LAGE ESKALIERT`,...state.eventLog].slice(0,20)}}for(const u of state.units){if((u.status!=='EN_ROUTE'&&u.status!=='RETURNING')||!u.route||u.route.length<2)continue;const idx=u.routeIndex??0;const next=u.route[Math.min(idx+1,u.route.length-1)];const d=Math.hypot(u.position.x-next.x,u.position.y-next.y);u.heading=Math.atan2(next.y-u.position.y,next.x-u.position.x)*180/Math.PI;const traffic=state.world.traffic/100;const step=Math.min(d,(u.speed/10)*(1-traffic*.45));if(d<=.7){u.position={...next};u.routeIndex=idx+1;if(u.routeIndex>=u.route.length-1){u.status=u.status==='RETURNING'?'AVAILABLE':'ON_SCENE';u.target=undefined;u.route=undefined;u.routeIndex=undefined}}else{const r=step/d;u.position={x:u.position.x+(next.x-u.position.x)*r,y:u.position.y+(next.y-u.position.y)*r}}u.fuel=Math.max(0,u.fuel-step*.06);u.maintenance=Math.max(0,u.maintenance-.003)}for(const p of state.personnel){if(!p.active)continue;p.fatigue=Math.min(100,(p.fatigue??0)+.015);if(state.world.nightFactor)p.stress=Math.min(100,p.stress+.005)}state.finance.costsToday+=2+state.units.length*.16;state.finance.fuel=Math.max(0,state.finance.fuel+.1)}
+const http=createServer((req,res)=>{if(req.url==='/health'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({name:'American Dispatch',region:state.center.region,version:state.version,players:clients.size,status:'online',incidents:state.incidents.length,roads:state.roads?.edges.length??0})) ;return}res.writeHead(200,{'content-type':'application/json; charset=utf-8'});res.end(JSON.stringify({name:'American Dispatch',region:state.center.region,players:clients.size,status:'online'}))});
+const wss=new WebSocketServer({server:http});wss.on('connection',socket=>{const client={id:`player-${Date.now()}-${clients.size}`,name:'Dispatcher',role:'CALL_TAKER' as Role,ready:false,lastSeen:Date.now()};clients.set(socket,client);if(!lobby.hostId)lobby.hostId=client.id;socket.send(JSON.stringify(snapshot()));socket.on('message',raw=>{try{const m=JSON.parse(raw.toString()) as Record<string,unknown>;let changed=false;if(m.type==='HELLO'){client.name=typeof m.name==='string'?m.name.slice(0,32):client.name;client.role=roleForHello(m.role,m.token,m.adminToken);client.lastSeen=Date.now();client.ready=m.ready===true;}
+else if(m.type==='READY'){client.ready=Boolean(m.ready);}
+else if(m.type==='DISPATCH'&&typeof m.unitId==='string'&&typeof m.incidentId==='string')changed=dispatch(client,m.unitId,m.incidentId);
+else if(m.type==='COMPLETE'&&typeof m.incidentId==='string')changed=complete(client,m.incidentId);
+else if(m.type==='GENERATE_INCIDENT')changed=generate(client);
+else if(m.type==='BUY_AMBULANCE')changed=buyAmbulance(client);
+else if(m.type==='HIRE_DISPATCHER')changed=hire(client);
+else if(m.type==='SET_WEATHER'&&authorized(client,['ADMIN'])&&typeof m.weather==='string'&&['CLEAR','CLOUDY','RAIN','HEAVY_RAIN','THUNDERSTORM','FOG','SNOW','HEATWAVE','WINDSTORM','FLOODING'].includes(m.weather)){state.world.weather=m.weather as GameState['world']['weather'];changed=true}
+else if(m.type==='SET_TIME'&&authorized(client,['ADMIN'])&&Number.isInteger(m.minutes)&&Number(m.minutes)>=0&&Number(m.minutes)<1440){state.simulationMinutes=Number(m.minutes);changed=true}
+else if(m.type==='RELEASE_UNITS'&&authorized(client,['ADMIN'])){state.units.forEach(u=>{u.status='AVAILABLE';u.target=undefined;u.route=undefined;u.routeIndex=undefined;u.assignedIncidentId=undefined});changed=true}
+else if(m.type==='ADD_BUDGET'&&authorized(client,['ADMIN'])){state.center.money+=50000;changed=true}
+else if(m.type==='RESET_GAME'&&authorized(client,['ADMIN'])){state=cloneState();sequence=Math.max(0,...state.incidents.map(i=>Number(i.id.replace('INC-',''))||0))+1;changed=true}
+else if(m.type==='PING'){socket.send(JSON.stringify({type:'PONG',serverTime:Date.now()}));return}else{err(socket,'Unbekannte oder unvollständige Aktion');return}
+lobby.players=[...clients.values()].map(p=>({id:p.id,name:p.name,role:p.role,ready:p.ready,connected:true}));if(changed)persistState();broadcast(snapshot())}catch{err(socket,'Ungültige Nachricht')}});socket.on('close',()=>{client.lastSeen=Date.now();clients.delete(socket);lobby.players=lobby.players.filter(p=>p.id!==client.id);if(lobby.hostId===client.id)lobby.hostId=lobby.players[0]?.id??'')});});
+setInterval(()=>{tick();broadcast(snapshot())},1000);setInterval(persistState,30000);const port=Number(process.env.PORT??8787);http.listen(port,()=>console.log(`American Dispatch server listening on :${port}`));
