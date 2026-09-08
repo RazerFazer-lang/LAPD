@@ -1,0 +1,3 @@
+import { describe, expect, it } from 'vitest';
+import { initialGameState } from '../src/game/state';
+describe('Phase 1 game state', () => { it('starts with a valid dispatch center', () => { expect(initialGameState.center.name).toBe('Redwood Metro Dispatch'); expect(initialGameState.center.money).toBe(250000); }); it('contains police, fire and EMS units', () => { expect(new Set(initialGameState.units.map(u=>u.service))).toEqual(new Set(['POLICE','FIRE','EMS'])); }); });

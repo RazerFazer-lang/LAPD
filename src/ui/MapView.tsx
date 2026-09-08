@@ -1,0 +1,8 @@
+import type { GameState } from '../game/state';
+const roads = Array.from({ length: 11 }, (_, i) => ({ y: 8 + i * 8 }));
+const blocks = [
+  [10,12,18,12],[34,10,16,10],[58,12,20,12],[76,30,14,15],[10,30,20,14],[35,30,18,16],[55,42,17,13],[15,52,17,13],[39,55,15,17],[62,60,20,14]
+];
+export function MapView({ state }: { state: GameState }) {
+  return <div className="map"><div className="map-water"/><div className="map-label city-a">REDWOOD CITY</div><div className="map-label city-b">LAKEWOOD</div><div className="map-label highway">I-8</div>{roads.map((r,i)=><div key={i} className="road" style={{top:`${r.y}%`}}/>)}<div className="road vertical r1"/><div className="road vertical r2"/>{blocks.map((b,i)=><div key={i} className="block" style={{left:`${b[0]}%`,top:`${b[1]}%`,width:`${b[2]}%`,height:`${b[3]}%`}}/>)}{state.incidents.map(i=><div key={i.id} className={`map-marker incident-marker p${i.priority}`} style={{left:`${i.location.x}%`,top:`${i.location.y}%`}} title={`${i.id} · ${i.address}`}>!</div>)}{state.units.map(u=><div key={u.id} className={`vehicle service-${u.service.toLowerCase()}`} style={{left:`${u.position.x}%`,top:`${u.position.y}%`}} title={`${u.callsign} · ${u.status}`}>{u.service==='POLICE'?'P':u.service==='FIRE'?'F':'E'}</div>)}<div className="map-controls"><button>＋</button><button>−</button><button>⌖</button></div><div className="map-legend"><span><i className="legend-dot police"/>POLIZEI</span><span><i className="legend-dot fire"/>FEUER</span><span><i className="legend-dot ems"/>EMS</span><span><i className="legend-dot incident"/>EINSATZ</span></div></div>;
+}

@@ -1,0 +1,5 @@
+import type { Service, Unit, UnitStatus } from '../game/state';
+const statusText: Record<UnitStatus,string> = { AVAILABLE:'VERFÜGBAR', BUSY:'BELEGT', EN_ROUTE:'AUF ANFAHRT', ON_SCENE:'VOR ORT', OUT_OF_SERVICE:'AUßER DIENST' };
+export function UnitPanel({ units, filter, onFilterChange }: { units: Unit[]; filter: Service|'ALL'; onFilterChange:(f: Service|'ALL')=>void }) {
+  return <div className="panel"><div className="panel-title"><span>EINHEITEN</span><b>{units.length}</b></div><div className="filters">{(['ALL','POLICE','FIRE','EMS'] as const).map(f=><button className={filter===f?'active':''} onClick={()=>onFilterChange(f)} key={f}>{f==='ALL'?'ALLE':f}</button>)}</div><div className="unit-list">{units.map(u=><div className="unit-row" key={u.id}><span className={`dot ${u.status.toLowerCase()}`}/><div className="unit-copy"><strong>{u.callsign}</strong><small>{u.id} · {statusText[u.status]}</small></div><span className={`service ${u.service.toLowerCase()}`}>{u.service}</span></div>)}</div></div>;
+}
