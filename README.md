@@ -2,6 +2,12 @@
 
 **Emergency Communications Simulator** – browserbasiertes 2D-Multiplayer-Leitstellenspiel im amerikanischen Stil mit deutscher Benutzeroberfläche.
 
+## [▶ Jetzt spielen](https://razerfazer-lang.github.io/LAPD/)
+
+Die GitHub-Pages-Version startet direkt im lokalen Simulationsbetrieb. Für eine
+gemeinsame Multiplayer-Sitzung ist zusätzlich ein konfigurierter WebSocket-Server
+erforderlich.
+
 ## Aktueller Stand
 
 Die Anwendung enthält inzwischen eine integrierte spielbare Alpha-Grundlage für die im Master-Prompt definierten Systeme: Redwood State / Redwood Metro County, interaktive 2D-Karte, 911-Einsätze, dynamische Eskalationen, Police/Fire/EMS, Fahrzeugbewegung, Krankenhäuser, Finanzen, Personal, Schichten, Reputation, Statistiken, Admin-Konsole, Save/Load und WebSocket-Multiplayer.
@@ -15,6 +21,23 @@ npm run dev
 
 Frontend: `http://localhost:5173`  
 Server: `http://localhost:8787`
+
+### Multiplayer-Konfiguration
+
+Für eine Multiplayer-Sitzung kopiere `.env.example` nach `.env` und setze zwei
+unterschiedliche, zufällige Tokens. Eine Rolle außer `911 Call Taker` erfordert
+`DISPATCH_TOKEN`; die Administratorrolle erfordert `ADMIN_TOKEN`. Der Client
+wird beispielsweise mit `http://localhost:5173/?token=...` geöffnet; für
+Administratorrechte ergänzt man `&adminToken=...`. Ohne gültiges Token bleibt
+die Sitzung absichtlich auf die Call-Taker-Rolle begrenzt.
+
+Der Server speichert den versionierten Zustand atomar standardmäßig unter
+`data/game-state.json`, bei Aktionen sowie alle 60 Sekunden. Dieser Pfad ist
+von Git ausgeschlossen und kann mit `SAVE_FILE` geändert werden.
+
+Die Client-Verbindung verwendet standardmäßig denselben Host auf Port `8787`.
+Für Reverse-Proxys oder getrennte Hosts kann `VITE_SERVER_URL` auf eine `ws://`
+oder `wss://`-Adresse gesetzt werden.
 
 ## Build & Tests
 
@@ -56,10 +79,10 @@ Dispatcher besitzen Erfahrung, Performance, Stress, Fehlerquote, Gehalt und Schi
 Mehrere Häuser besitzen Kapazität, aktuelle Belegung, Trauma, Burn Unit, Pädiatrie und Helipad. Diese Daten stehen im Managementbereich live zur Verfügung.
 
 ### Multiplayer
-Der Node/WebSocket-Server ist autoritativ. Rollen umfassen Call Taker, Police Dispatcher, Fire Dispatcher, EMS Dispatcher, Supervisor, Manager und Administrator. Wichtige Actions werden serverseitig validiert.
+Der Node/WebSocket-Server ist autoritativ. Rollen umfassen Call Taker, Police Dispatcher, Fire Dispatcher, EMS Dispatcher, Supervisor, Manager und Administrator. Rollen- und Admin-Tokens werden serverseitig geprüft; Dispatch, Abschluss, Personal, Fahrzeuge sowie Admin-Aktionen werden auf dem Server validiert und an alle Clients synchronisiert.
 
 ### Save/Load
-Der Browser besitzt versionierte lokale Savegame-Daten über `localStorage`. Die UI kann speichern und laden; die Admin-Konsole kann den Spielstand zurücksetzen.
+Der Browser besitzt lokale Savegame-Daten für den Offline-Betrieb. Multiplayer-Sitzungen verwenden zusätzlich den atomar geschriebenen, versionierten Server-Spielstand; die Admin-Konsole kann diesen nur mit Administratorrechten zurücksetzen.
 
 ## Phasenplan
 
