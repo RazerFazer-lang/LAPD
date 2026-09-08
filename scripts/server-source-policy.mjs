@@ -1,7 +1,23 @@
 export const STARTER_VEHICLE_CALL='state.finance.upgrades+=cost;addVehicle(c,service,safePosition);';
+const CONNECTION_ID_INIT="const c:Client={id:`player-${randomUUID()}`,name:'Dispatcher',ready:false,accountToken:'',remoteAddress};";
+const CONNECTION_ID_STABLE="const c:Client={id:'',name:'Dispatcher',ready:false,accountToken:'',remoteAddress};";
+const HELLO_ACCOUNT_BLOCK="if(existing){c.accountToken=existing.token;c.name=existing.name}else{c.name=cleanName(m.name);const account=accountFor(c);account.name=c.name}";
+const HELLO_ACCOUNT_BLOCK_STABLE="if(existing){const provisionalToken=c.accountToken;c.accountToken=existing.token;c.id=`player-${existing.token}`;c.name=existing.name;if(provisionalToken&&provisionalToken!==existing.token)accounts.delete(provisionalToken)}else{c.name=cleanName(m.name)}";
 
 export function patchServerSource(source){
-  if(!source.includes(STARTER_VEHICLE_CALL))
+  let patched=source;
+  if(!patched.includes(STARTER_VEHICLE_CALL))
     throw new Error('Server source guard: expected starter vehicle call was not found. Refusing to build/run an unexpected server.');
-  return source.replace(STARTER_VEHICLE_CALL,'state.finance.upgrades+=cost;');
+  patched=patched.replace(STARTER_VEHICLE_CALL,'state.finance.upgrades+=cost;');
+  if(!patched.includes(CONNECTION_ID_INIT))
+    throw new Error('Server source guard: connection identity initialization changed unexpectedly.');
+  patched=patched.replace(CONNECTION_ID_INIT,CONNECTION_ID_STABLE);
+  if(!patched.includes(HELLO_ACCOUNT_BLOCK))
+    throw new Error('Server source guard: account handshake block changed unexpectedly.');
+  patched=patched.replace(HELLO_ACCOUNT_BLOCK,HELLO_ACCOUNT_BLOCK_STABLE);
+  const helloAccountMarker="const account=accountFor(c);if(typeof m.name==='string'&&!existing)account.name=c.name=cleanName(m.name);account.lastSeen=Date.now();c.ready=m.ready===true;";
+  if(!patched.includes(helloAccountMarker))
+    throw new Error('Server source guard: HELLO account update block changed unexpectedly.');
+  patched=patched.replace(helloAccountMarker,"const account=accountFor(c);if(!existing)c.id=`player-${account.token}`;if(typeof m.name==='string'&&!existing)account.name=c.name=cleanName(m.name);account.lastSeen=Date.now();c.ready=m.ready===true;");
+  return patched;
 }
