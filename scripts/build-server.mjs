@@ -1,15 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
+import { patchServerSource } from './server-source-policy.mjs';
 
-// Stations are infrastructure, not free vehicles. The first fleet unit is purchased
-// later through the station's FLEET / APPARATUS upgrades. Keep the server source
-// readable while making the production bundle enforce that rule.
+// Keep production behavior identical to local development: stations are
+// infrastructure and do not grant a free vehicle. Fleet units are purchased
+// through station upgrades.
 const serverSource=await readFile('server/index.ts','utf8');
-const patchedServer=serverSource.replace(
-  'state.finance.upgrades+=cost;addVehicle(c,service,safePosition);',
-  'state.finance.upgrades+=cost;',
-);
-if(patchedServer===serverSource)throw new Error('Production build guard: starter vehicle call not found. Refusing to build an unexpected server.');
+const patchedServer=patchServerSource(serverSource);
 
 await build({
   stdin:{
