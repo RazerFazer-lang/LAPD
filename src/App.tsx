@@ -13,7 +13,7 @@ const ranks:Record<Service,string[]>={POLICE:['Police Recruit','Police Officer I
 const rankRewards:Record<Service,string[]>={POLICE:['Streifenwagen','zweite Einheit','mehr Personal','Traffic Unit','K9-Option','Sergeant-Führung','mehr Streifen','Detective/Investigation','Command Vehicle','Spezialfahrzeuge','größeres Budget','Sonderlagen','Behördenleitung'],FIRE:['Engine 1','zweite Engine','mehr Crew','Rescue Unit','Engineer-Posten','Lieutenant-Führung','Ladder Truck','Battalion Command','Sonderfahrzeuge','mehr Wachenbudget','Major Incident Command','Fire Chief Command'],EMS:['BLS Ambulance','ALS Ambulance','zweite Ambulance','mehr Crew','FTO-System','Supervisor Unit','mehr Fahrzeuge','MCI-Kapazität','Sondertransport','größeres Budget','Command Staff','EMS Command']};
 // Production supports both HTTP and HTTPS while the backend keeps its public HTTPS endpoint.
 // HTTP uses the direct WebSocket port because browsers do not follow an HTTP->HTTPS redirect during a WebSocket upgrade.
-const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`${location.protocol==='https:'?'wss':'ws'}://${location.hostname}:8787`:location.protocol==='https:'?'wss://ws.leitstelle.verion-digital.de':'ws://ws.leitstelle.verion-digital.de:8787');
+const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`ws://${location.hostname}:8787`:`ws://${location.host}/ws`);
 const ACCOUNT_TOKEN_KEY='ad-account-token-v1';
 let ws:WebSocket|null=null;
 function loadProfile(){try{return JSON.parse(localStorage.getItem('ad-profile-v5')??'null')}catch{return null}}

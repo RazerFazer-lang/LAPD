@@ -2,11 +2,11 @@
 
 **Emergency Communications Simulator** – browserbasiertes 2D-Multiplayer-Leitstellenspiel im amerikanischen Stil mit deutscher Benutzeroberfläche.
 
-## [▶ Jetzt spielen](https://razerfazer-lang.github.io/LAPD/)
+## ▶ Produktionsbetrieb
 
-Die GitHub-Pages-Version startet direkt im lokalen Simulationsbetrieb. Für eine
-gemeinsame Multiplayer-Sitzung ist zusätzlich ein konfigurierter WebSocket-Server
-erforderlich.
+Das Spiel wird als Node.js-Webservice betrieben. Frontend und Multiplayer-WebSocket laufen über denselben HTTP-Host.
+
+GitHub Pages ist kein Produktionshost mehr. Node.js liefert den Vite-Build direkt aus und stellt den Multiplayer-WebSocket unter `/ws` bereit.
 
 ## Aktueller Stand
 
@@ -35,9 +35,7 @@ Der Server speichert den versionierten Zustand atomar standardmäßig unter
 `data/game-state.json`, bei Aktionen sowie alle 60 Sekunden. Dieser Pfad ist
 von Git ausgeschlossen und kann mit `SAVE_FILE` geändert werden.
 
-Die Client-Verbindung verwendet standardmäßig denselben Host auf Port `8787`.
-Für Reverse-Proxys oder getrennte Hosts kann `VITE_SERVER_URL` auf eine `ws://`
-oder `wss://`-Adresse gesetzt werden.
+Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host: `ws://<host>/ws`. Für den aktuellen Betrieb werden ausschließlich HTTP und `ws://` verwendet.
 
 ## Build & Tests
 
