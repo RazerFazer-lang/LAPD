@@ -1,0 +1,40 @@
+name: Fix server syntax
+
+on:
+  push:
+    paths:
+      - .github/workflows/fix-server-syntax.yml
+      - .github/fix-server-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Repair malformed HTTP server line
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/index.ts')
+          s=p.read_text()
+          bad="const http=createServer((req,res)=>serveClient(req,res));res.end(JSON.stringify({name:'American Dispatch',status:'online',players:clients.size,facilities:state.facilities?.length??0,path:req.url}))});"
+          good="const http=createServer((req,res)=>serveClient(req,res));"
+          if bad not in s:
+              raise SystemExit('Expected malformed HTTP server line was not found')
+          p.write_text(s.replace(bad, good, 1))
+          PY
+      - name: Validate TypeScript
+        run: |
+          npm install --ignore-scripts
+          npx tsc --noEmit
+      - name: Commit repair and remove temporary workflow
+        run: |
+          rm -f .github/fix-server-trigger .github/workflows/fix-server-syntax.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/index.ts .github/fix-server-trigger .github/workflows/fix-server-syntax.yml
+          git commit -m "fix: repair Linux HTTP server startup"
+          git push
