@@ -22,7 +22,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-
           app=Path('src/App.tsx')
           s=app.read_text()
           old="const serverUrl=import.meta.env.VITE_SERVER_URL??(import.meta.env.DEV?`${location.protocol==='https:'?'wss':'ws'}://${location.hostname}:8787`:location.protocol==='https:'?'wss://ws.leitstelle.verion-digital.de':'ws://ws.leitstelle.verion-digital.de:8787');"
@@ -58,7 +57,7 @@ jobs:
           if addition.strip() not in s:
             if marker not in s: raise SystemExit('Server constants marker was not found')
             s=s.replace(marker,marker+addition,1)
-          s,n=re.subn(r"const http=createServer\(\(req,res\)=>\{.*?\n\}\);","const http=createServer((req,res)=>serveClient(req,res));",s,count=1,flags=re.S)
+          s,n=re.subn(r"const http=createServer\(\(req,res\)=>\{.*?\}\);","const http=createServer((req,res)=>serveClient(req,res));",s,count=1,flags=re.S)
           if n!=1: raise SystemExit('HTTP createServer block was not found')
           s,n=re.subn(r"http\.listen\([^;]+\);","http.listen(PORT,HOST,()=>console.log(`American Dispatch server listening on ${HOST}:${PORT} · HTTP + WebSocket`));",s,count=1)
           if n!=1: raise SystemExit('http.listen call was not found')
