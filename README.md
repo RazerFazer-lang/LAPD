@@ -2,6 +2,14 @@
 
 **Emergency Communications Simulator** – browserbasiertes 2D-Multiplayer-Leitstellenspiel im amerikanischen Stil mit deutscher Benutzeroberfläche.
 
+## Lokaler Test
+
+**Wichtig:** GitHub kann keinen `localhost`-Server auf deinem PC starten. Der Link unten ist deshalb nur eine lokale Adresse für deinen eigenen Rechner.
+
+### ▶ [LOCALHOST TEST](http://localhost:5173/)
+
+Wenn du lokal testest, läuft die Entwicklungsoberfläche über Vite auf Port `5173`. Für diesen Frontend-Test brauchst du keinen AMP-Server und keinen öffentlichen Server.
+
 ## Produktionsbetrieb: Linux + AMP
 
 Der Produktionsserver läuft als Node.js-Anwendung unter Linux und wird über AMP verwaltet.
@@ -13,12 +21,6 @@ Der Produktionsserver läuft als Node.js-Anwendung unter Linux und wird über AM
 - Standard-Port: `7778`
 - HTTP + WebSocket: `ws://<server-ip>:7778/ws`
 - Healthcheck: `http://<server-ip>:7778/health`
-
-### 🖥️ Lokal öffnen
-
-**[▶ American Dispatch auf localhost:7778 öffnen](http://localhost:7778)**
-
-> Der Link funktioniert, wenn der Server auf deinem eigenen PC/Server läuft und Port `7778` verwendet.
 
 GitHub Pages ist nicht mehr der Produktionspfad.
 
