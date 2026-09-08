@@ -14,7 +14,7 @@ if(patchedServer===serverSource)throw new Error('Production build guard: starter
 await build({
   stdin:{
     contents:patchedServer,
-    resolveDir:'.',
+    resolveDir:'server',
     sourcefile:'server/index.ts',
     loader:'ts',
   },
