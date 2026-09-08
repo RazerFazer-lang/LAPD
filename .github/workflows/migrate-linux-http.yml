@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ !contains(github.event.head_commit.message, 'chore: migrate to Linux HTTP Node hosting') }}
+    if: ${{ hashFiles('.github/workflows/deploy-pages.yml') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,7 +42,7 @@ jobs:
           p = Path('server/index.ts')
           s = p.read_text()
           old_import = "import { dirname, resolve } from 'node:path';"
-          new_import = "import { dirname, extname, join, normalize, resolve } from 'node:path';"
+          new_import = "import { dirname, extname, join, normalize, resolve, sep } from 'node:path';"
           if old_import not in s:
               raise SystemExit('Expected node:path import was not found')
           s = s.replace(old_import, new_import, 1)
@@ -62,9 +62,8 @@ jobs:
             }
             const requested=normalize(join(CLIENT_DIST,pathname==='/'?'index.html':pathname));
             const root=normalize(CLIENT_DIST);
-            const safe=requested===root||requested.startsWith(root+require('node:path').sep);
-            let file=safe?requested:join(CLIENT_DIST,'index.html');
-            try{if(!safe)throw new Error('unsafe path');const data=readFileSync(file);res.writeHead(200,{'content-type':MIME[extname(file).toLowerCase()]??'application/octet-stream','cache-control':file.endsWith('index.html')?'no-cache':'public, max-age=31536000, immutable'});res.end(data);}
+            const safe=requested===root||requested.startsWith(root+sep);
+            try{if(!safe)throw new Error('unsafe path');const data=readFileSync(requested);res.writeHead(200,{'content-type':MIME[extname(requested).toLowerCase()]??'application/octet-stream','cache-control':requested.endsWith('index.html')?'no-cache':'public, max-age=31536000, immutable'});res.end(data);}
             catch{try{const data=readFileSync(join(CLIENT_DIST,'index.html'));res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});res.end(data);}catch{res.writeHead(503,{'content-type':'text/plain; charset=utf-8'});res.end('American Dispatch is starting.');}}
           }
           """
@@ -89,17 +88,6 @@ jobs:
       - name: Remove GitHub Pages production deployment
         run: rm -f .github/workflows/deploy-pages.yml
 
-      - name: Update Vite config for same-origin HTTP development
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('vite.config.ts')
-          s=p.read_text()
-          s=s.replace("target: 'ws://127.0.0.1:8787',", "target: 'ws://127.0.0.1:8787',")
-          s=s.replace("rewrite: (path) => path.replace(/^\\/ws/, ''),", "rewrite: (path) => path.replace(/^\\/ws/, ''),")
-          p.write_text(s)
-          PY
-
       - name: Update documentation
         run: |
           python3 - <<'PY'
@@ -108,13 +96,13 @@ jobs:
           s=p.read_text()
           s=s.replace('## [▶ Jetzt spielen](https://razerfazer-lang.github.io/LAPD/)', '## ▶ Produktionsbetrieb\n\nDas Spiel wird als Node.js-Webservice betrieben. Frontend und Multiplayer-WebSocket laufen über denselben HTTP-Host.')
           s=s.replace('Die GitHub-Pages-Version startet direkt im lokalen Simulationsbetrieb. Für eine\ngemeinsame Multiplayer-Sitzung ist zusätzlich ein konfigurierter WebSocket-Server\nerforderlich.', 'GitHub Pages ist kein Produktionshost mehr. Node.js liefert den Vite-Build direkt aus und stellt den Multiplayer-WebSocket unter `/ws` bereit.')
-          s=s.replace('Die Client-Verbindung verwendet standardmäßig denselben Host auf Port `8787`.\nFür Reverse-Proxys oder getrennte Hosts kann `VITE_SERVER_URL` auf eine `ws://`\noder `wss://`-Adresse gesetzt werden.', 'Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host: `ws://<host>/ws`. Es werden für den aktuellen Betrieb ausschließlich HTTP und `ws://` verwendet.')
+          s=s.replace('Die Client-Verbindung verwendet standardmäßig denselben Host auf Port `8787`.\nFür Reverse-Proxys oder getrennte Hosts kann `VITE_SERVER_URL` auf eine `ws://`\noder `wss://`-Adresse gesetzt werden.', 'Die Produktions-Client-Verbindung verwendet automatisch denselben HTTP-Host: `ws://<host>/ws`. Für den aktuellen Betrieb werden ausschließlich HTTP und `ws://` verwendet.')
           p.write_text(s)
           PY
 
       - name: Commit migration
         run: |
-          git add src/App.tsx server/index.ts README.md vite.config.ts .github/workflows/deploy-pages.yml
+          git add src/App.tsx server/index.ts README.md .github/workflows/deploy-pages.yml
           git diff --cached --quiet && exit 0
           git commit -m "chore: migrate to Linux HTTP Node hosting"
           git push origin HEAD:main
