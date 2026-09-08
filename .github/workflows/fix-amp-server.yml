@@ -1,0 +1,40 @@
+name: Fix AMP server bootstrap
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'fix: repair AMP server bootstrap'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Repair server bootstrap and default port
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('server/index.ts')
+          s = p.read_text()
+          old = "const http=createServer((req,res)=>serveClient(req,res));res.end(JSON.stringify({name:'American Dispatch',status:'online',players:clients.size,facilities:state.facilities?.length??0,path:req.url}))});"
+          new = "const http=createServer((req,res)=>serveClient(req,res));"
+          if old not in s:
+              raise SystemExit('Expected broken HTTP bootstrap was not found')
+          s = s.replace(old, new, 1)
+          s = s.replace("const port=Number(process.env.PORT??8787);http.listen(PORT,HOST,", "http.listen(PORT,HOST,")
+          s = s.replace("const PORT=Number(process.env.PORT??8787);", "const PORT=Number(process.env.PORT??7778);")
+          p.write_text(s)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/index.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: repair AMP server bootstrap"
+          git push
