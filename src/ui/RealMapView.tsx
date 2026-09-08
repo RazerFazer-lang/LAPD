@@ -9,17 +9,14 @@ import './real-map.css';
 type Point={x:number;y:number};
 const serviceColor=(s:Service)=>s==='POLICE'?'#1668b2':s==='FIRE'?'#c62832':'#087f5b';
 const facilityStyle:Record<Facility['type'],{icon:string;color:string}>={POLICE_STATION:{icon:'P',color:'#1668b2'},FIRE_STATION:{icon:'F',color:'#c62832'},HOSPITAL:{icon:'H',color:'#087f5b'},SCHOOL:{icon:'S',color:'#8a6400'},FUEL:{icon:'$',color:'#8a6400'},SHOPPING:{icon:'M',color:'#7b3f98'},INDUSTRIAL:{icon:'I',color:'#8c4a38'},AIRPORT:{icon:'A',color:'#456b91'},RAIL:{icon:'R',color:'#455a64'},PARK:{icon:'P',color:'#347a4b'},BRIDGE:{icon:'B',color:'#735421'}};
-// Real geographic play area: Redwood City / San Carlos, California.
 const bounds={west:-122.285,east:-122.185,south:37.455,north:37.535};
 const toLngLat=(p:Point):[number,number]=>[bounds.west+p.x/100*(bounds.east-bounds.west),bounds.north-p.y/100*(bounds.north-bounds.south)];
-
 function Vehicle({unit}:{unit:GameState['units'][number]}){
  const moving=unit.status==='EN_ROUTE'||unit.status==='RETURNING';
  const heading=unit.heading??(moving&&unit.target?Math.atan2(unit.target.y-unit.position.y,unit.target.x-unit.position.x)*180/Math.PI:0);
  const ladder=/Ladder|Truck/i.test(unit.type);const short=unit.callsign.replace('AMBULANCE','A').replace('PATROL','P').replace('ENGINE','E').replace('TRUCK','T').replace('BATTALION','B');
  return <div className={`rv ${unit.service.toLowerCase()} ${moving?'moving':''}`} style={{transform:`translate(-50%,-50%) rotate(${heading}deg)`}}><span className="rv-glow"/><span className="rv-body"><i className="rv-window"/>{ladder&&<i className="rv-ladder"/>}<i className="rv-wheel w1"/><i className="rv-wheel w2"/><i className="rv-wheel w3"/><i className="rv-wheel w4"/><i className="rv-light l1"/><i className="rv-light l2"/></span><b>{short}</b></div>;
 }
-
 export function RealMapView({state,zoom,onZoomChange,onIncidentSelect}:{state:GameState;zoom:number;onZoomChange:(z:number)=>void;onIncidentSelect:(id:string)=>void}){
  const ref=useRef<HTMLDivElement|null>(null);const mapRef=useRef<Map|null>(null);
  const [ready,setReady]=useState(false);const [failed,setFailed]=useState(false);const [ambient,setAmbient]=useState(false);
@@ -28,7 +25,7 @@ export function RealMapView({state,zoom,onZoomChange,onIncidentSelect}:{state:Ga
  useEffect(()=>{
   if(!ref.current||mapRef.current)return;
   setWorkerUrl(workerUrl);
-  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/bright',center:[-122.235,37.49],zoom:13,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:true,renderWorldCopies:false,maxBounds:[[-122.31,37.43],[-122.16,37.56]]});
+  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/bright',center:[-122.235,37.49],zoom:13,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:{compact:true},renderWorldCopies:false,maxBounds:[[-122.31,37.43],[-122.16,37.56]]});
   map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'bottom-right');map.addControl(new ScaleControl({maxWidth:140,unit:'imperial'}),'bottom-left');
   map.on('load',()=>{setReady(true);map.resize()});
   map.on('move',()=>tick(v=>v+1));map.on('error',(event)=>{const m=event?.error?.message?.toLowerCase()??'';if(m.includes('style')||m.includes('worker')||m.includes('source'))setFailed(true)});mapRef.current=map;return()=>{map.remove();mapRef.current=null};
