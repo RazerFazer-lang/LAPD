@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ hashFiles('.github/workflows/deploy-pages.yml') != '' }}
+    if: ${{ github.sha == '6384262cc487ca93ed0cd226ab8b5360bef6c112' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
