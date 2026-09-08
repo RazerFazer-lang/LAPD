@@ -4,7 +4,7 @@
 
 ## AMP / Linux Produktionsbetrieb
 
-Das Projekt ist für **CubeCoders AMP – NodeJS App Runner** vorbereitet. Die AMP-Konfiguration ist absichtlich so aufgebaut wie bei einer klassischen produktionsfertigen Node-App: AMP lädt das Git-Repository, führt einmalig das Setup-Skript aus und startet anschließend die bereits gebaute JavaScript-Datei.
+Das Projekt ist für **CubeCoders AMP – NodeJS App Runner** vorbereitet. AMP lädt das Git-Repository und synchronisiert es vor jedem Start mit `main`, damit die laufende Instanz nicht auf einer alten UI-Version bleibt.
 
 ### AMP-Konfiguration
 
@@ -20,13 +20,14 @@ Das Projekt ist für **CubeCoders AMP – NodeJS App Runner** vorbereitet. Die A
 | **npm Install Type** | `None` |
 | **Run App Setup Commands** | **AN** |
 | **App Setup Commands** | `node scripts/amp-setup.mjs` |
-| **Run App Pre-start Commands** | **AUS** |
+| **Run App Pre-start Commands** | **AN** |
+| **App Pre-start Commands** | `node scripts/amp-update.mjs` |
 | **App Name** | `dist/server/index.js` |
 | **App Installation Location** | leer lassen |
 | **Node.js Command Line Arguments** | leer |
 | **App Command Line Arguments** | leer |
 
-Das Setup-Skript installiert die Abhängigkeiten und führt den Produktions-Build aus. Danach existiert die AMP-Startdatei `dist/server/index.js`.
+`amp-update.mjs` führt vor jedem Start `git pull --ff-only origin main`, `npm install` und den Produktions-Build aus. Dadurch werden neue GitHub-Versionen beim nächsten AMP-Neustart automatisch übernommen.
 
 ### Netzwerk
 
@@ -72,3 +73,7 @@ npm start
 ```
 
 Dann läuft das komplette Spiel unter `http://localhost:7778`.
+
+## GitHub-Spiel-Link
+
+GitHub Pages dient als direkter Einstieg und öffnet die laufende HTTP-Spielinstanz. Der Multiplayer-Server selbst muss dafür auf AMP laufen.
