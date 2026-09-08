@@ -12,7 +12,12 @@ const patchedServer=serverSource.replace(
 if(patchedServer===serverSource)throw new Error('Production build guard: starter vehicle call not found. Refusing to build an unexpected server.');
 
 await build({
-  stdin:{contents:patchedServer,resolveDir:'.',sourcefile:'server/index.ts'},
+  stdin:{
+    contents:patchedServer,
+    resolveDir:'.',
+    sourcefile:'server/index.ts',
+    loader:'ts',
+  },
   outfile:'dist/server/index.js',
   bundle:true,
   platform:'node',
