@@ -7,8 +7,9 @@ import { playDispatchAlert, playRadioPing, playSiren, toggleAmbient } from '../g
 import './real-map.css';
 
 type Point={x:number;y:number};
-const serviceColor=(s:Service)=>s==='POLICE'?'#4da3ff':s==='FIRE'?'#e94b55':'#43c99a';
-const facilityStyle:Record<Facility['type'],{icon:string;color:string}>={POLICE_STATION:{icon:'P',color:'#4da3ff'},FIRE_STATION:{icon:'F',color:'#e94b55'},HOSPITAL:{icon:'H',color:'#43c99a'},SCHOOL:{icon:'S',color:'#d8b45d'},FUEL:{icon:'$',color:'#d8b45d'},SHOPPING:{icon:'M',color:'#b987d7'},INDUSTRIAL:{icon:'I',color:'#c87967'},AIRPORT:{icon:'A',color:'#789cc2'},RAIL:{icon:'R',color:'#9aaab3'},PARK:{icon:'P',color:'#65a976'},BRIDGE:{icon:'B',color:'#c69d59'}};
+const serviceColor=(s:Service)=>s==='POLICE'?'#1668b2':s==='FIRE'?'#c62832':'#087f5b';
+const facilityStyle:Record<Facility['type'],{icon:string;color:string}>={POLICE_STATION:{icon:'P',color:'#1668b2'},FIRE_STATION:{icon:'F',color:'#c62832'},HOSPITAL:{icon:'H',color:'#087f5b'},SCHOOL:{icon:'S',color:'#8a6400'},FUEL:{icon:'$',color:'#8a6400'},SHOPPING:{icon:'M',color:'#7b3f98'},INDUSTRIAL:{icon:'I',color:'#8c4a38'},AIRPORT:{icon:'A',color:'#456b91'},RAIL:{icon:'R',color:'#455a64'},PARK:{icon:'P',color:'#347a4b'},BRIDGE:{icon:'B',color:'#735421'}};
+// Real geographic play area: Redwood City / San Carlos, California.
 const bounds={west:-122.285,east:-122.185,south:37.455,north:37.535};
 const toLngLat=(p:Point):[number,number]=>[bounds.west+p.x/100*(bounds.east-bounds.west),bounds.north-p.y/100*(bounds.north-bounds.south)];
 
@@ -27,28 +28,28 @@ export function RealMapView({state,zoom,onZoomChange,onIncidentSelect}:{state:Ga
  useEffect(()=>{
   if(!ref.current||mapRef.current)return;
   setWorkerUrl(workerUrl);
-  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/liberty',center:[-122.235,37.49],zoom:12.7,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:false});
+  const map=new Map({container:ref.current,style:'https://tiles.openfreemap.org/styles/bright',center:[-122.235,37.49],zoom:13,minZoom:11,maxZoom:18,dragRotate:false,pitchWithRotate:false,keyboard:true,attributionControl:true,renderWorldCopies:false,maxBounds:[[-122.31,37.43],[-122.16,37.56]]});
   map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'bottom-right');map.addControl(new ScaleControl({maxWidth:140,unit:'imperial'}),'bottom-left');
-  map.on('load',()=>{setReady(true);map.resize();for(const layer of map.getStyle().layers??[]){if(layer.type==='symbol'&&/poi|housenumber|transit/i.test(layer.id)){try{map.setLayoutProperty(layer.id,'visibility','none')}catch{}}}});
-  map.on('move',()=>tick(v=>v+1));map.on('error',(event)=>{const m=event?.error?.message?.toLowerCase()??'';if(m.includes('style')||m.includes('worker'))setFailed(true)});mapRef.current=map;return()=>{map.remove();mapRef.current=null};
+  map.on('load',()=>{setReady(true);map.resize()});
+  map.on('move',()=>tick(v=>v+1));map.on('error',(event)=>{const m=event?.error?.message?.toLowerCase()??'';if(m.includes('style')||m.includes('worker')||m.includes('source'))setFailed(true)});mapRef.current=map;return()=>{map.remove();mapRef.current=null};
  },[]);
  useEffect(()=>{if(mapRef.current&&ready)mapRef.current.setZoom(12.15+Math.log2(Math.max(.7,zoom)))},[zoom,ready]);
  const routeFeatures=useMemo(()=>state.units.filter(u=>u.route&&u.route.length>1&&(u.status==='EN_ROUTE'||u.status==='RETURNING')).map(u=>({color:serviceColor(u.service),coordinates:u.route!.map(toLngLat)})),[state.units]);
- useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const data={type:'FeatureCollection',features:routeFeatures.map(r=>({type:'Feature',properties:{color:r.color},geometry:{type:'LineString',coordinates:r.coordinates}}))};const src=map.getSource('dispatch-routes') as any;if(src){src.setData(data);return}map.addSource('dispatch-routes',{type:'geojson',data} as any);map.addLayer({id:'dispatch-routes-glow',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':7,'line-opacity':.12,'line-blur':4}} as any);map.addLayer({id:'dispatch-routes',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':2,'line-opacity':.78,'line-dasharray':[1.2,1.8]}} as any)},[routeFeatures,ready]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const data={type:'FeatureCollection',features:routeFeatures.map(r=>({type:'Feature',properties:{color:r.color},geometry:{type:'LineString',coordinates:r.coordinates}}))};const src=map.getSource('dispatch-routes') as any;if(src){src.setData(data);return}map.addSource('dispatch-routes',{type:'geojson',data} as any);map.addLayer({id:'dispatch-routes-glow',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':6,'line-opacity':.09,'line-blur':3}} as any);map.addLayer({id:'dispatch-routes',type:'line',source:'dispatch-routes',paint:{'line-color':['get','color'],'line-width':2,'line-opacity':.72,'line-dasharray':[1.5,2]}} as any)},[routeFeatures,ready]);
  const project=(p:Point)=>mapRef.current?.project(toLngLat(p));
  const select=(id:string)=>{playRadioPing();playDispatchAlert();onIncidentSelect(id)};
  return <div className="map-shell real-cad-map">
-  <div className="real-toolbar"><button onClick={()=>onZoomChange(Math.min(3,zoom+.25))}>＋</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>onZoomChange(Math.max(.65,zoom-.25))}>−</button><button onClick={()=>onZoomChange(1)}>⌂</button><i className="toolbar-sep"/><button className={units?'on':''} onClick={()=>setUnits(v=>!v)}>UNITS</button><button className={incidents?'on':''} onClick={()=>setIncidents(v=>!v)}>911</button><button className={poi?'on':''} onClick={()=>setPoi(v=>!v)}>POI</button><button className={traffic?'on':''} onClick={()=>setTraffic(v=>!v)}>TRAFFIC</button><i className="toolbar-sep"/><button className={ambient?'on':''} onClick={()=>setAmbient(toggleAmbient())}>♫</button><button onClick={playRadioPing}>RADIO</button><button onClick={playSiren}>SIREN</button></div>
-  <div className="real-status"><div><b>REDWOOD METRO COUNTY</b><small>PUBLIC SAFETY CAD</small></div><span>{state.world.weather} · TRAFFIC {state.world.traffic}% · {state.world.nightFactor?'NIGHT':'DAY'}</span></div>
-  <div className="map-corner north">N<br/><span>↑</span></div><div className="map-corner coords">37.4900° N<br/>122.2350° W</div>
-  <div ref={ref} className={`real-map-canvas ${failed?'failed':''}`}/>{failed&&<div className="map-fallback-message">BASEMAP UNAVAILABLE · CHECK NETWORK / TILE SERVICE</div>}
+  <div className="real-toolbar"><button onClick={()=>onZoomChange(Math.min(3,zoom+.25)}>＋</button><span>{Math.round(zoom*100)}%</span><button onClick={()=>onZoomChange(Math.max(.65,zoom-.25))}>−</button><button onClick={()=>onZoomChange(1)}>⌂</button><i className="toolbar-sep"/><button className={units?'on':''} onClick={()=>setUnits(v=>!v)}>UNITS</button><button className={incidents?'on':''} onClick={()=>setIncidents(v=>!v)}>911</button><button className={poi?'on':''} onClick={()=>setPoi(v=>!v)}>POI</button><button className={traffic?'on':''} onClick={()=>setTraffic(v=>!v)}>TRAFFIC</button><i className="toolbar-sep"/><button className={ambient?'on':''} onClick={()=>setAmbient(toggleAmbient())}>♫</button><button onClick={playRadioPing}>RADIO</button><button onClick={playSiren}>SIREN</button></div>
+  <div className="real-status"><div><b>REDWOOD CITY / SAN CARLOS</b><small>PUBLIC SAFETY CAD</small></div><span>{state.world.weather} · TRAFFIC {state.world.traffic}% · {state.world.nightFactor?'NIGHT':'DAY'}</span></div>
+  <div className="map-corner north">N<br/><span>↑</span></div>
+  <div ref={ref} className={`real-map-canvas ${failed?'failed':''}`}/>{failed&&<div className="map-fallback-message">REAL MAP UNAVAILABLE · CHECK NETWORK / TILE SERVICE</div>}
   <div className="real-overlay">
-   {traffic&&<div className="traffic-panel"><b>TRAFFIC</b><span>{state.world.traffic}% NETWORK LOAD</span><i style={{width:`${state.world.traffic}%`}}/></div>}
+   {traffic&&<div className="traffic-panel"><b>NETWORK</b><span>{state.world.traffic}%</span><i style={{width:`${state.world.traffic}%`}}/></div>}
    {poi&&ready&&facilities.map(f=>{const p=project(f.position);if(!p)return null;const s=facilityStyle[f.type];return <button key={f.id} className="poi-badge" style={{left:p.x,top:p.y,borderColor:s.color}} onClick={playRadioPing} title={f.name}><span style={{color:s.color}}>{s.icon}</span></button>})}
    {incidents&&ready&&active.map(i=>{const p=project(i.location);if(!p)return null;const critical=i.priority===1;return <button key={i.id} className={`incident-badge ${critical?'critical':''}`} style={{left:p.x,top:p.y}} onClick={()=>select(i.id)}><span/><b>{i.id}</b><small>P{i.priority}</small></button>})}
    {units&&ready&&state.units.map(u=>{const p=project(u.position);if(!p)return null;return <div key={u.id} className="rv-wrap" style={{left:p.x,top:p.y}}><Vehicle unit={u}/></div>})}
   </div>
-  <div className="real-legend"><span><i className="dot police"/> POLICE</span><span><i className="dot fire"/> FIRE</span><span><i className="dot ems"/> EMS</span><span><i className="dot incident"/> 911</span><span>© OpenStreetMap · OpenFreeMap</span></div>
-  <div className="real-footer"><b>LIVE CAD</b> · {state.units.length} UNITS · {active.length} ACTIVE · ROAD-NETWORK ROUTING</div>
+  <div className="real-legend"><span><i className="dot police"/> POLICE</span><span><i className="dot fire"/> FIRE</span><span><i className="dot ems"/> EMS</span><span><i className="dot incident"/> 911</span><span>Map data © OpenStreetMap contributors</span></div>
+  <div className="real-footer"><b>LIVE CAD</b> · {state.units.length} UNITS · {active.length} ACTIVE · REAL OSM BASEMAP</div>
  </div>;
 }
