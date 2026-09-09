@@ -3,7 +3,7 @@ import { CITIES, DIFFICULTY, INCIDENT_CATALOG, WEATHER_RULES, type Difficulty } 
 
 export interface SimulationMetrics { responseScore:number; dispatchScore:number; resolutionScore:number; unitCoverage:number; callLoad:number; reputationDelta:number; }
 const clamp=(n:number,a=0,b=100)=>Math.max(a,Math.min(b,n));
-const weightedRandom=<T>(items:T[],weights:number[],rng=Math.random)=>{const total=weights.reduce((a,b)=>a+b,0);let p=rng*total;for(let i=0;i<items.length;i++){p-=weights[i];if(p<=0)return items[i]}return items[items.length-1]};
+const weightedRandom=<T>(items:T[],weights:number[],rng:()=>number=Math.random)=>{const total=weights.reduce((a,b)=>a+b,0);let p=rng()*total;for(let i=0;i<items.length;i++){p-=weights[i];if(p<=0)return items[i]}return items[items.length-1]};
 
 export function advanceWorld(state:GameState,minutes:number,difficulty:Difficulty='NORMAL'):GameState{
  const next=structuredClone(state); const d=DIFFICULTY[difficulty];
@@ -32,7 +32,7 @@ export function advanceWorld(state:GameState,minutes:number,difficulty:Difficult
 function weatherEventFactor(weather:Weather){return WEATHER_RULES[weather]?.event??1}
 function weatherTrafficFactor(weather:Weather){return WEATHER_RULES[weather]?.traffic??1}
 
-export function generateIncident(state:GameState,difficulty:Difficulty='NORMAL',rng=Math.random):Incident{
+export function generateIncident(state:GameState,difficulty:Difficulty='NORMAL',rng:()=>number=Math.random):Incident{
  const weighted=INCIDENT_CATALOG.map(def=>{let w=def.weight;const hour=state.world.hour;if(hour>=22||hour<6)w*=def.type==='POLICE'||def.type==='MEDICAL'?1.35:.9;if(state.world.traffic>70&&def.type==='TRAFFIC')w*=1.7;const weather=WEATHER_RULES[state.world.weather];if(def.type==='WILDFIRE'||def.type==='FIRE')w*=weather.fire;if(def.type==='MEDICAL')w*=weather.medical;return Math.max(.01,w*DIFFICULTY[difficulty].eventRate)});
  const def=weightedRandom(INCIDENT_CATALOG,weighted,rng);const city=CITIES[Math.floor(rng()*CITIES.length)];const region=def.regions[Math.floor(rng()*def.regions.length)];const priority=(def.type==='MCI'||def.type==='AVIATION'||def.type==='RAIL'?1:1+Math.floor(rng()*3)) as 1|2|3|4;const patients=Math.floor(def.patientRange[0]+rng()*(def.patientRange[1]-def.patientRange[0]+1));const seq=String(state.statistics.calls+state.incidents.length+1).padStart(3,'0');
  return {id:`CALL-${seq}`,type:def.type,priority,location:{x:8+rng()*84,y:8+rng()*84},address:`${100+Math.floor(rng()*8900)} ${['Pine Street','Market Avenue','Canyon Road','Harbor Drive','8th Avenue','Redwood Boulevard'][Math.floor(rng()*6)]}, ${city.name}, RS`,status:'NEW',summary:def.summary,description:`${def.summary}. Region ${region}. 911 Caller liefert laufend neue Informationen.`,createdAt:Date.now(),ageMinutes:0,stageIndex:0,stages:def.stages,requiredServices:[...def.services] as Service[],unitIds:[],patients,escalation:def.escalation*DIFFICULTY[difficulty].escalation,danger:def.hazards.length*18+priority*8,objective:def.objective,sections:def.type==='MCI'?[{id:'TRIAGE',name:'Triage',objective:'Patienten priorisieren',unitIds:[]},{id:'TRANSPORT',name:'Transport',objective:'Krankenhäuser zuweisen',unitIds:[]}]:undefined};
