@@ -1,9 +1,1 @@
-export const de = {
-  title: 'AMERICAN DISPATCH',
-  subtitle: 'Emergency Communications Simulator',
-  calls: 'Notrufe', incidents: 'Einsätze', units: 'Einheiten', money: 'Budget', reputation: 'Reputation',
-  available: 'Verfügbar', busy: 'Belegt', responding: 'Auf Anfahrt', onScene: 'Vor Ort',
-  police: 'Polizei', fire: 'Feuerwehr', ems: 'Rettungsdienst',
-  priority: 'Priorität', newIncident: 'Neuer Einsatz', dispatch: 'Alarmieren', eventLog: 'Ereignisprotokoll',
-  map: 'Karte', center: 'Leitstelle', all: 'Alle', search: 'Suchen',
-} as const;
+export const de={app:{title:'American Dispatch',subtitle:'Emergency Communications Simulator'},nav:{cad:'CAD',agency:'Leitstelle',ranks:'Ränge',world:'Welt'},actions:{newGame:'Neues Spiel',multiplayer:'Multiplayer',load:'Spiel laden',settings:'Einstellungen',credits:'Credits',accept:'Notruf annehmen',dispatch:'Alarmieren',complete:'Abschließen',cancel:'Abbrechen',mutualAid:'Amtshilfe anfordern'},status:{available:'Verfügbar',busy:'Belegt',enRoute:'Auf Anfahrt',onScene:'Vor Ort',transport:'Transport',returning:'Rückkehr',outOfService:'Außer Dienst',maintenance:'Wartung'},incident:{incoming:'Eingehender 911-Notruf',priority:'Priorität',hazards:'Gefahren',patients:'Patienten',objective:'Einsatzziel',timeline:'Verlauf'},world:{weather:'Wetter',traffic:'Verkehr',day:'Tag',time:'Uhrzeit',population:'Bevölkerung'},finance:{budget:'Budget',revenue:'Einnahmen',costs:'Ausgaben',payroll:'Personal',maintenance:'Wartung',fuel:'Treibstoff',upgrades:'Ausbauten'},roles:{callTaker:'911 Call Taker',police:'Police Dispatcher',fire:'Fire Dispatcher',ems:'EMS Dispatcher',supervisor:'Supervisor',manager:'Manager',admin:'Administrator'}} as const;
